@@ -120,6 +120,7 @@ def main():
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
+        print("using CUDA")
         torch.cuda.manual_seed_all(args.seed)
         n_gpu = torch.cuda.device_count()
 
@@ -150,7 +151,7 @@ def main():
                 loss.backward()
                 tr_loss += loss.item()
                 optimizer.step()
-                model.zero_grad()                    
+                model.zero_grad()
          
          # Save a trained model, configuration and tokenizer                 
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself

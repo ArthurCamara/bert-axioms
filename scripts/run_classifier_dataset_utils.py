@@ -6,6 +6,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, Tens
 import pickle
 import sys
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class MsMarcoProcessor(DataProcessor):
 
     def _create_examples(self, lines, set_type):
         examples = []
-        for (i, line) in enumerate(lines):
+        for (i, line) in tqdm(enumerate(lines), desc="creating examples..."):
             if i == 0:
                 continue
             guid = "%s-%s" % (set_type, line[0])
@@ -196,7 +197,7 @@ output_modes = {
 
 
 def load_dataset(
-        task_name, model_name, max_seq_length, 
+        task_name, model_name, max_seq_length,
         data_dir, tokenizer, batch_size, eval=False):
 
     if eval:
@@ -226,7 +227,7 @@ def load_dataset(
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
     all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
     data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
-    
+
     if not eval:
         sampler = RandomSampler(data)
     else:
