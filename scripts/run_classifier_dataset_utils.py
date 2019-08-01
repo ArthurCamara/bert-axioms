@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # coding=utf-8
 # Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
 # Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
@@ -26,6 +27,19 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef, f1_score
 
 logger = logging.getLogger(__name__)
+=======
+import csv
+import logging
+import os
+import torch
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset)
+import pickle
+import sys
+from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
+
+logger = logging.getLogger(__name__)
+
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 csv.field_size_limit(sys.maxsize)
 
 class InputExample(object):
@@ -33,7 +47,10 @@ class InputExample(object):
 
     def __init__(self, guid, text_a, text_b=None, label=None):
         """Constructs a InputExample.
+<<<<<<< HEAD
 
+=======
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         Args:
             guid: Unique id for the example.
             text_a: string. The untokenized text of the first sequence. For single
@@ -81,12 +98,16 @@ class DataProcessor(object):
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
             for line in reader:
+<<<<<<< HEAD
                 if sys.version_info[0] == 2:
                     line = list(unicode(cell, 'utf-8') for cell in line)
+=======
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
                 lines.append(line)
             return lines
 
 
+<<<<<<< HEAD
 class MrpcProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
@@ -358,12 +379,20 @@ class MsMarcoProcessor(DataProcessor):
     """Processor class for the MsMarco dataset (triples version)."""
     def get_train_examples(self, data_dir):
         return self._create_examples(self._read_tsv(os.path.join(data_dir, "train-samples.tsv")), "train")
+=======
+class MsMarcoProcessor(DataProcessor):
+    """Processor class for the MsMarco dataset (triples version)."""
+    def get_train_examples(self, data_dir):
+        return self._create_examples(self._read_tsv(
+            os.path.join(data_dir, "train-samples.tsv")), "train")
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
     def get_dev_examples(self, data_dir):
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "bert_for_rerank.tsv")), "train")
 
     def get_labels(self):
+<<<<<<< HEAD
          return ['0', '1']
 
     def _create_examples(self, lines, set_type):
@@ -398,6 +427,11 @@ class WnliProcessor(DataProcessor):
 
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
+=======
+        return ['0', '1']
+
+    def _create_examples(self, lines, set_type):
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         examples = []
         for (i, line) in enumerate(lines):
             if i == 0:
@@ -415,7 +449,11 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                                  tokenizer, output_mode):
     """Loads a data file into a list of `InputBatch`s."""
 
+<<<<<<< HEAD
     label_map = {label : i for i, label in enumerate(label_list)}
+=======
+    label_map = {label: i for i, label in enumerate(label_list)}
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -436,6 +474,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
             if len(tokens_a) > max_seq_length - 2:
                 tokens_a = tokens_a[:(max_seq_length - 2)]
 
+<<<<<<< HEAD
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -454,6 +493,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
         # For classification tasks, the first vector (corresponding to [CLS]) is
         # used as as the "sentence vector". Note that this only makes sense because
         # the entire model is fine-tuned.
+=======
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
         segment_ids = [0] * len(tokens)
 
@@ -488,6 +529,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
             logger.info("tokens: %s" % " ".join(
+<<<<<<< HEAD
                     [str(x) for x in tokens]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
@@ -500,6 +542,22 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                               input_mask=input_mask,
                               segment_ids=segment_ids,
                               label_id=label_id))
+=======
+                [str(x) for x in tokens]))
+            logger.info("input_ids: %s" %
+                        " ".join([str(x) for x in input_ids]))
+            logger.info("input_mask: %s" %
+                        " ".join([str(x) for x in input_mask]))
+            logger.info(
+                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+            logger.info("label: %s (id = %d)" % (example.label, label_id))
+
+        features.append(
+            InputFeatures(input_ids=input_ids,
+                          input_mask=input_mask,
+                          segment_ids=segment_ids,
+                          label_id=label_id))
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
     return features
 
 
@@ -520,6 +578,7 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
             tokens_b.pop()
 
 
+<<<<<<< HEAD
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()
 
@@ -597,3 +656,68 @@ output_modes = {
     "wnli": "classification",
     "msmarco": "classification"
 }
+=======
+processors = {
+    "msmarco": MsMarcoProcessor
+}
+output_modes = {
+    "msmarco": "classification"
+}
+
+
+def load_dataset(
+        task_name, model_name, max_seq_length, 
+        data_dir, tokenizer, batch_size, eval=False):
+
+    if eval:
+        cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
+            list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
+    else:
+        cached_features_file = os.path.join(data_dir, 'train_{}_{}_{}'.format(
+            list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
+    if os.path.isfile(cached_features_file):
+        with open(cached_features_file, 'rb') as reader:
+            features = pickle.load(reader)
+    else:
+        processor = processors[task_name]()
+        if eval:
+            examples = processor.get_dev_examples(data_dir)
+        else:
+            examples = processor.get_train_examples(data_dir)
+
+        features = convert_examples_to_features(
+            examples, processor.label_list,
+            max_seq_length, tokenizer, 'classifier')
+        logger.info("Saving features into cached file %s", cached_features_file)
+        with open(cached_features_file, 'wb') as writer:
+            pickle.dump(features, writer)
+    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
+    all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
+    data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    
+    if not eval:
+        sampler = RandomSampler(data)
+    else:
+        sampler = SequentialSampler(data)
+    dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
+
+    return dataloader
+
+
+def init_optimizer(model, n_train_steps, learning_rate, warmup_proportion):
+    param_optimizer = list(model.named_parameters())
+    no_decay = ['bias', 'gamma', 'beta']
+    num_train_steps = n_train_steps
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if n not in no_decay], 'weight_decay_rate': 0.01},
+        {'params': [p for n, p in param_optimizer if n in no_decay], 'weight_decay_rate': 0.0},
+    ]
+    optimizer = BertAdam(
+        optimizer_grouped_parameters, lr=learning_rate,
+        warmup=warmup_proportion,
+        t_total=num_train_steps)
+    return optimizer
+
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
