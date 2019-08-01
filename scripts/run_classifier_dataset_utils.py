@@ -63,7 +63,7 @@ class DataProcessor(object):
         with open(input_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
-            for line in reader:
+            for line in tqdm(reader, desc="Reading input tsv"):
                 lines.append(line)
             return lines
 
