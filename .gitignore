@@ -3,6 +3,7 @@ outputs/*
 venvs/*
 terrier-core/*
 terrier/*
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
