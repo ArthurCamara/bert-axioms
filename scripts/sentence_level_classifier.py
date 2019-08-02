@@ -9,9 +9,6 @@ from tqdm import tqdm, trange
 import numpy as np
 
 import torch
-# from torch.nn import CrossEntropyLoss, MSELoss
-
-# from tensorboardX import SummaryWriter
 
 from pytorch_pretrained_bert.file_utils import WEIGHTS_NAME, CONFIG_NAME
 from pytorch_pretrained_bert.modeling import BertForNextSentencePrediction
@@ -114,31 +111,35 @@ def main():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
+    parser.add_argument("--sample_run", action='store_true', help="run on a smaller dataset")
     args = parser.parse_args()
 
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
+        print("using CUDA")
         torch.cuda.manual_seed_all(args.seed)
         n_gpu = torch.cuda.device_count()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
 
+    print("Using device {}".format(device))
     model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     if n_gpu > 1:
         model = torch.nn.DataParallel(model)
     tokenizer = BertTokenizer.from_pretrained(args.bert_model)
     model.to(device)
+    print("model loaded to device")
 
     if args.do_train:
         train_dataloader = load_dataset(
             args.task_name, args.bert_model, args.max_seq_length,
-            args.data_dir, tokenizer, args.train_batch_size)
+            args.data_dir, tokenizer, args.train_batch_size, sample=args.sample_run)
         num_train_optimization_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
         optimizer = init_optimizer(model, num_train_optimization_steps,
                                    args.learning_rate, args.warmup_proportion)
-        
+
         model.train()
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             tr_loss = 0
@@ -150,9 +151,9 @@ def main():
                 loss.backward()
                 tr_loss += loss.item()
                 optimizer.step()
-                model.zero_grad()                    
-         
-         # Save a trained model, configuration and tokenizer                 
+                model.zero_grad()
+
+         # Save a trained model, configuration and tokenizer
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
 
         # If we save using the predefined names, we can load using `from_pretrained`
@@ -161,7 +162,7 @@ def main():
         torch.save(model_to_save.state_dict(), output_model_file)
         model_to_save.config.to_json_file(output_config_file)
         tokenizer.save_vocabulary(args.output_dir)
-    
+
     if args.do_eval:
         model = BertForNextSentencePrediction.from_pretrained(args.output_dir)
         tokenizer = BertTokenizer.from_pretrained(

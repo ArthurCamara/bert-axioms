@@ -48,12 +48,20 @@ else:
 
 
 logger = logging.getLogger(__name__)
+<<<<<<< HEAD
+csv.field_size_limit(sys.maxsize)
+=======
 
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
 def main():
     parser = argparse.ArgumentParser()
 
+<<<<<<< HEAD
+    # Required parameters
+=======
     ## Required parameters
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
     parser.add_argument("--data_dir",
                         default=None,
                         type=str,
@@ -74,7 +82,11 @@ def main():
                         required=True,
                         help="The output directory where the model predictions and checkpoints will be written.")
 
+<<<<<<< HEAD
+    # Other parameters
+=======
     ## Other parameters
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
     parser.add_argument("--cache_dir",
                         default="",
                         type=str,
@@ -163,16 +175,26 @@ def main():
         torch.distributed.init_process_group(backend='nccl')
     args.device = device
 
+<<<<<<< HEAD
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                        datefmt='%m/%d/%Y %H:%M:%S',
+                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+=======
     logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt = '%m/%d/%Y %H:%M:%S',
                         level = logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, n_gpu, bool(args.local_rank != -1), args.fp16))
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
+<<<<<<< HEAD
+            args.gradient_accumulation_steps))
+=======
                             args.gradient_accumulation_steps))
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
@@ -202,7 +224,11 @@ def main():
     num_labels = len(label_list)
 
     if args.local_rank not in [-1, 0]:
+<<<<<<< HEAD
+        torch.distributed.barrier()  # Make sure only first process in distributed training will download model&vocab
+=======
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
     model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
     if args.local_rank == 0:
@@ -230,9 +256,13 @@ def main():
         # Prepare data loader
         train_examples = processor.get_train_examples(args.data_dir)
         cached_train_features_file = os.path.join(args.data_dir, 'train_{0}_{1}_{2}'.format(
+<<<<<<< HEAD
+            list(filter(None, args.bert_model.split('/'))).pop(), str(args.max_seq_length), str(task_name)))
+=======
             list(filter(None, args.bert_model.split('/'))).pop(),
                         str(args.max_seq_length),
                         str(task_name)))
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         try:
             with open(cached_train_features_file, "rb") as reader:
                 train_features = pickle.load(reader)
@@ -269,13 +299,21 @@ def main():
         optimizer_grouped_parameters = [
             {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
             {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+<<<<<<< HEAD
+        ]
+=======
             ]
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         if args.fp16:
             try:
                 from apex.optimizers import FP16_Optimizer
                 from apex.optimizers import FusedAdam
             except ImportError:
+<<<<<<< HEAD
+                raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use  fp16 training.")
+=======
                 raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
             optimizer = FusedAdam(optimizer_grouped_parameters,
                                   lr=args.learning_rate,
@@ -303,7 +341,12 @@ def main():
         for _ in trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
+<<<<<<< HEAD
+            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", 
+                                              disable=args.local_rank not in [-1, 0])):
+=======
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])):
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
 
@@ -318,7 +361,11 @@ def main():
                     loss = loss_fct(logits.view(-1), label_ids.view(-1))
 
                 if n_gpu > 1:
+<<<<<<< HEAD
+                    loss = loss.mean()  # mean() to average on multi-gpu.
+=======
                     loss = loss.mean() # mean() to average on multi-gpu.
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
 
@@ -344,8 +391,13 @@ def main():
                         tb_writer.add_scalar('lr', optimizer.get_lr()[0], global_step)
                         tb_writer.add_scalar('loss', loss.item(), global_step)
 
+<<<<<<< HEAD
+    # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
+    # Example:
+=======
     ### Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
     ### Example:
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # Save a trained model, configuration and tokenizer
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
@@ -370,6 +422,13 @@ def main():
 
     model.to(device)
 
+<<<<<<< HEAD
+    # Evaluation
+    if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+        eval_examples = processor.get_dev_examples(args.data_dir)
+        cached_eval_features_file = os.path.join(args.data_dir, 'dev_{0}_{1}_{2}'.format(
+            list(filter(None, args.bert_model.split('/'))).pop(), str(args.max_seq_length), str(task_name)))
+=======
     ### Evaluation
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         eval_examples = processor.get_dev_examples(args.data_dir)
@@ -377,6 +436,7 @@ def main():
             list(filter(None, args.bert_model.split('/'))).pop(),
                         str(args.max_seq_length),
                         str(task_name)))
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         try:
             with open(cached_eval_features_file, "rb") as reader:
                 eval_features = pickle.load(reader)
@@ -388,7 +448,10 @@ def main():
                 with open(cached_eval_features_file, "wb") as writer:
                     pickle.dump(eval_features, writer)
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", args.eval_batch_size)
@@ -451,7 +514,11 @@ def main():
             preds = np.squeeze(preds)
         result = compute_metrics(task_name, preds, out_label_ids)
 
+<<<<<<< HEAD
+        loss = tr_loss / global_step if args.do_train else None
+=======
         loss = tr_loss/global_step if args.do_train else None
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
         result['eval_loss'] = eval_loss
         result['global_step'] = global_step
@@ -464,6 +531,8 @@ def main():
                 logger.info("  %s = %s", key, str(result[key]))
                 writer.write("%s = %s\n" % (key, str(result[key])))
 
+<<<<<<< HEAD
+=======
         # hack for MNLI-MM
         if task_name == "mnli":
             task_name = "mnli-mm"
@@ -536,6 +605,7 @@ def main():
                 for key in sorted(result.keys()):
                     logger.info("  %s = %s", key, str(result[key]))
                     writer.write("%s = %s\n" % (key, str(result[key])))
+>>>>>>> ed50bcfafc1dd7566164645f3377eb87309d7f6f
 
 if __name__ == "__main__":
     main()
