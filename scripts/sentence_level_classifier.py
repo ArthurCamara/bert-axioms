@@ -117,6 +117,7 @@ def main():
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    n_gpu = 0
     if torch.cuda.is_available():
         print("using CUDA")
         torch.cuda.manual_seed_all(args.seed)
