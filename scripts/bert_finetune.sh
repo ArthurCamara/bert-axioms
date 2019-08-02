@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#SBATCH --partition=general
+#SBATCH --partition=wis
 #SBATCH --qos=long
 #SBATCH --time=30:00:00
 #SBATCH --ntasks=1
