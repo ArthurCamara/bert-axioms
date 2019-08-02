@@ -111,6 +111,7 @@ def main():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
+    parser.add_argument("--sample_run", action='store_true', help="run on a smaller dataset")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -134,7 +135,7 @@ def main():
     if args.do_train:
         train_dataloader = load_dataset(
             args.task_name, args.bert_model, args.max_seq_length,
-            args.data_dir, tokenizer, args.train_batch_size)
+            args.data_dir, tokenizer, args.train_batch_size, sample=args.sample_run)
         num_train_optimization_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
         optimizer = init_optimizer(model, num_train_optimization_steps,
                                    args.learning_rate, args.warmup_proportion)

@@ -58,25 +58,27 @@ class DataProcessor(object):
         raise NotImplementedError()
 
     @classmethod
-    def _read_tsv(cls, input_file, quotechar=None):
+    def _read_tsv(cls, input_file, quotechar=None, sample=False):
         """Reads a tab separated value file."""
         with open(input_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
-            for line in tqdm(reader, desc="Reading input tsv"):
+            for line in tqdm(reader, desc="Reading input tsv", total=2122814):
+                if sample and len(lines) >1000:
+                    return lines
                 lines.append(line)
             return lines
 
 
 class MsMarcoProcessor(DataProcessor):
     """Processor class for the MsMarco dataset (triples version)."""
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir, sample=False):
         return self._create_examples(self._read_tsv(
-            os.path.join(data_dir, "train-samples.tsv")), "train")
+            os.path.join(data_dir, "train-samples.tsv"), sample=sample), "train")
 
     def get_dev_examples(self, data_dir):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "bert_for_rerank.tsv")), "train")
+            self._read_tsv(os.path.join(data_dir, "dev-samples.tsv")), "train")
 
     def get_labels(self):
         return ['0', '1']
@@ -198,7 +200,7 @@ output_modes = {
 
 def load_dataset(
         task_name, model_name, max_seq_length,
-        data_dir, tokenizer, batch_size, eval=False):
+        data_dir, tokenizer, batch_size, eval=False, sample=False):
 
     if eval:
         cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
@@ -214,11 +216,11 @@ def load_dataset(
         if eval:
             examples = processor.get_dev_examples(data_dir)
         else:
-            examples = processor.get_train_examples(data_dir)
+            examples = processor.get_train_examples(data_dir, sample)
 
         features = convert_examples_to_features(
-            examples, processor.label_list,
-            max_seq_length, tokenizer, 'classifier')
+            examples, processor.get_labels(),
+            max_seq_length, tokenizer, 'classification')
         logger.info("Saving features into cached file %s", cached_features_file)
         with open(cached_features_file, 'wb') as writer:
             pickle.dump(features, writer)
