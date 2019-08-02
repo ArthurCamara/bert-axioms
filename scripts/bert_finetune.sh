@@ -16,6 +16,7 @@ module load cudnn/10.0-7.4.2.24
 source /home/nfs/acamara/venvs/bert/bin/activate
 
 DATA_DIR=/tudelft.net/staff-umbrella/punchbag/msmarco/data
+SCRIPT_DIR=/tudelft.net/staff-umbrella/punchbag/msmarco/scripts
 
 cd $SCRIPT_DIR
 
