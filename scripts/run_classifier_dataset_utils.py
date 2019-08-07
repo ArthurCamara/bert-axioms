@@ -6,7 +6,7 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, Tens
 import pickle
 import sys
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
-from tqdm import tqdm
+from tqdm.autonotebook import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class DataProcessor(object):
         with open(input_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
-            for line in tqdm(reader, desc="Reading input tsv", total=2122814):
+            for line in tqdm(reader, desc="Reading input tsv"):
                 if sample and len(lines) >1000:
                     return lines
                 lines.append(line)
@@ -78,7 +78,7 @@ class MsMarcoProcessor(DataProcessor):
 
     def get_dev_examples(self, data_dir):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev-samples.tsv")), "dev")
+            self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv")), "dev")
 
     def get_labels(self):
         return ['0', '1']
@@ -198,11 +198,13 @@ output_modes = {
 
 def load_dataset(
         task_name, model_name, max_seq_length,
-        data_dir, tokenizer, batch_size, eval=False, sample=False, return_examples=False):
+        data_dir, tokenizer, batch_size, eval=False, sample=False, 
+        return_examples=False, force_reload=False):
 
     if eval:
         cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
             list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
+        print(cached_features_file)
     else:
         cached_features_file = os.path.join(data_dir, 'train_{}_{}_{}'.format(
             list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
@@ -214,7 +216,7 @@ def load_dataset(
         examples = processor.get_train_examples(data_dir, sample)
 
     #if cached file already exists, do not reload it.     
-    if os.path.isfile(cached_features_file):
+    if os.path.isfile(cached_features_file) and not force_reload:
         with open(cached_features_file, 'rb') as reader:
             features = pickle.load(reader)
     else:
@@ -224,6 +226,8 @@ def load_dataset(
         logger.info("Saving features into cached file %s", cached_features_file)
         with open(cached_features_file, 'wb') as writer:
             pickle.dump(features, writer)
+    
+    assert len(features) == len(examples)
     
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)

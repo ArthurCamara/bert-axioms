@@ -4,7 +4,8 @@ import argparse
 import logging
 import os
 import random
-from tqdm import tqdm, trange
+from tqdm.autonotebook import tqdm, trange
+
 
 import numpy as np
 
