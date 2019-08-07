@@ -58,12 +58,12 @@ class DataProcessor(object):
         raise NotImplementedError()
 
     @classmethod
-    def _read_tsv(cls, input_file, quotechar=None, sample=False):
+    def _read_tsv(cls, input_file, quotechar=None, sample=False, total=None):
         """Reads a tab separated value file."""
         with open(input_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
-            for line in tqdm(reader, desc="Reading input tsv"):
+            for line in tqdm(reader, desc="Reading input tsv", total=total):
                 if sample and len(lines) >1000:
                     return lines
                 lines.append(line)
@@ -72,20 +72,20 @@ class DataProcessor(object):
 
 class MsMarcoProcessor(DataProcessor):
     """Processor class for the MsMarco dataset (triples version)."""
-    def get_train_examples(self, data_dir, sample=False):
+    def get_train_examples(self, data_dir, sample=False, total=None):
         return self._create_examples(self._read_tsv(
-            os.path.join(data_dir, "train-samples.tsv"), sample=sample), "train")
+            os.path.join(data_dir, "train-samples.tsv"), sample=sample, total=total), "train", total=total)
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir, total=None):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv")), "dev")
+            self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv"), total=total), "dev", total=total)
 
     def get_labels(self):
         return ['0', '1']
 
-    def _create_examples(self, lines, set_type):
+    def _create_examples(self, lines, set_type, total=None):
         examples = []
-        for (i, line) in tqdm(enumerate(lines), desc="creating examples..."):
+        for (i, line) in tqdm(enumerate(lines), desc="creating examples...", total=total):
             guid = "%s-%s" % (set_type, line[0])
             text_a = line[1]
             text_b = line[2]
@@ -96,16 +96,13 @@ class MsMarcoProcessor(DataProcessor):
 
 
 def convert_examples_to_features(examples, label_list, max_seq_length,
-                                 tokenizer, output_mode):
+                                 tokenizer, output_mode, total=None):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
-    for (ex_index, example) in tqdm(enumerate(examples), desc="Feature Extraction"):
-        if ex_index % 10000 == 0:
-            logger.info("Writing example %d of %d" % (ex_index, len(examples)))
-
+    for (ex_index, example) in tqdm(enumerate(examples), desc="Feature Extraction", total=total):
         tokens_a = tokenizer.tokenize(example.text_a)
 
         tokens_b = None
@@ -199,7 +196,8 @@ output_modes = {
 def load_dataset(
         task_name, model_name, max_seq_length,
         data_dir, tokenizer, batch_size, eval=False, sample=False, 
-        return_examples=False, force_reload=False):
+        return_examples=False, force_reload=False,
+        expected_len=None):
 
     if eval:
         cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
@@ -211,9 +209,9 @@ def load_dataset(
 
     processor = processors[task_name]()
     if eval:
-        examples = processor.get_dev_examples(data_dir)
+        examples = processor.get_dev_examples(data_dir, total=expected_len)
     else:
-        examples = processor.get_train_examples(data_dir, sample)
+        examples = processor.get_train_examples(data_dir, sample, total=expected_len)
 
     #if cached file already exists, do not reload it.     
     if os.path.isfile(cached_features_file) and not force_reload:
@@ -222,13 +220,13 @@ def load_dataset(
     else:
         features = convert_examples_to_features(
             examples, processor.get_labels(),
-            max_seq_length, tokenizer, 'classification')
+            max_seq_length, tokenizer, 'classification', total=expected_len)
         logger.info("Saving features into cached file %s", cached_features_file)
         with open(cached_features_file, 'wb') as writer:
             pickle.dump(features, writer)
     
     assert len(features) == len(examples)
-    
+
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
