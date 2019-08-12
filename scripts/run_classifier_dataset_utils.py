@@ -78,7 +78,7 @@ class MsMarcoProcessor(DataProcessor):
 
     def get_dev_examples(self, data_dir):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev-samples.tsv")), "train")
+            self._read_tsv(os.path.join(data_dir, "dev-samples.tsv")), "dev")
 
     def get_labels(self):
         return ['0', '1']
@@ -86,8 +86,6 @@ class MsMarcoProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         examples = []
         for (i, line) in tqdm(enumerate(lines), desc="creating examples..."):
-            if i == 0:
-                continue
             guid = "%s-%s" % (set_type, line[0])
             text_a = line[1]
             text_b = line[2]
@@ -200,7 +198,7 @@ output_modes = {
 
 def load_dataset(
         task_name, model_name, max_seq_length,
-        data_dir, tokenizer, batch_size, eval=False, sample=False):
+        data_dir, tokenizer, batch_size, eval=False, sample=False, return_examples=False):
 
     if eval:
         cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
@@ -208,22 +206,25 @@ def load_dataset(
     else:
         cached_features_file = os.path.join(data_dir, 'train_{}_{}_{}'.format(
             list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
+
+    processor = processors[task_name]()
+    if eval:
+        examples = processor.get_dev_examples(data_dir)
+    else:
+        examples = processor.get_train_examples(data_dir, sample)
+
+    #if cached file already exists, do not reload it.     
     if os.path.isfile(cached_features_file):
         with open(cached_features_file, 'rb') as reader:
             features = pickle.load(reader)
     else:
-        processor = processors[task_name]()
-        if eval:
-            examples = processor.get_dev_examples(data_dir)
-        else:
-            examples = processor.get_train_examples(data_dir, sample)
-
         features = convert_examples_to_features(
             examples, processor.get_labels(),
             max_seq_length, tokenizer, 'classification')
         logger.info("Saving features into cached file %s", cached_features_file)
         with open(cached_features_file, 'wb') as writer:
             pickle.dump(features, writer)
+    
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
@@ -234,8 +235,11 @@ def load_dataset(
         sampler = RandomSampler(data)
     else:
         sampler = SequentialSampler(data)
+    
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
+    if return_examples:
+        return dataloader, examples
     return dataloader
 
 
