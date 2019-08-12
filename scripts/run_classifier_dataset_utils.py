@@ -8,6 +8,10 @@ import pickle
 import sys
 from pytorch_pretrained_bert.optimization import BertAdam
 from tqdm.autonotebook import tqdm
+import multiprocessing
+from copy import deepcopy
+multiprocessing.set_start_method('spawn', True)
+
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +83,10 @@ class MsMarcoProcessor(DataProcessor):
         return self._create_examples(self._read_tsv(
             os.path.join(data_dir, "train-samples.tsv"), sample=sample, total=total), "train", total=total)
 
+    # TODO CHANGE TO ACTUAL FILE. THIS IS A SAMPLE.
     def get_dev_examples(self, data_dir, total=None):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv"), total=total), "dev", total=total)
-
+            self._read_tsv(os.path.join(data_dir, "small_sample.tsv"), total=total), "dev", total=total)
     def get_labels(self):
         return ['0', '1']
 
@@ -98,76 +102,62 @@ class MsMarcoProcessor(DataProcessor):
         return examples
 
 
+def convert_sample_to_feature(example, label_map, max_seq_length, tokenizer, output_mode):
+    tokens_a = tokenizer.tokenize(example.text_a)
+    tokens_b = None
+    if example.text_b:
+        tokens_b = tokenizer.tokenize(example.text_b)
+        _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+    else:
+        if len(tokens_a) > max_seq_length - 2:
+            tokens_a = tokens_a[:(max_seq_length - 2)]
+    tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+    segment_ids = [0] * len(tokens)
+    if tokens_b:
+        tokens += tokens_b + ["[SEP]"]
+        segment_ids += [1] * (len(tokens_b) + 1)
+    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+    input_mask = [1] * len(input_ids)
+    padding = [0] * (max_seq_length - len(input_ids))
+    input_ids += padding
+    input_mask += padding
+    segment_ids += padding
+
+    assert len(input_ids) == max_seq_length, "input_id"
+    assert len(input_mask) == max_seq_length, "input_mask"
+    assert len(segment_ids) == max_seq_length, "segment_ids"
+
+    if output_mode == "classification":
+        label_id = label_map[example.label]
+    elif output_mode == "regression":
+        label_id = float(example.label)
+    else:
+        raise KeyError(output_mode)
+    return InputFeatures(input_ids=input_ids,
+                         input_mask=input_mask,
+                         segment_ids=segment_ids,
+                         label_id=label_id)
+
+
 def convert_examples_to_features(examples, label_list, max_seq_length,
                                  tokenizer, output_mode, total=None):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label: i for i, label in enumerate(label_list)}
 
-    features = []
-    for (ex_index, example) in tqdm(enumerate(examples), desc="Feature Extraction", total=total):
-        tokens_a = tokenizer.tokenize(example.text_a)
+    returns = []
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    pbar = tqdm(total=total)
 
-        tokens_b = None
-        if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-        else:
-            # Account for [CLS] and [SEP] with "- 2"
-            if len(tokens_a) > max_seq_length - 2:
-                tokens_a = tokens_a[:(max_seq_length - 2)]
+    def update(*a):
+        pbar.update()
 
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
-
-        if tokens_b:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
-
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
-
-        # The mask has 1 for real tokens and 0 for padding tokens. Only real
-        # tokens are attended to.
-        input_mask = [1] * len(input_ids)
-
-        # Zero-pad up to the sequence length.
-        padding = [0] * (max_seq_length - len(input_ids))
-        input_ids += padding
-        input_mask += padding
-        segment_ids += padding
-
-        assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
-
-        if output_mode == "classification":
-            label_id = label_map[example.label]
-        elif output_mode == "regression":
-            label_id = float(example.label)
-        else:
-            raise KeyError(output_mode)
-
-        if ex_index < 5:
-            logger.info("*** Example ***")
-            logger.info("guid: %s" % (example.guid))
-            logger.info("tokens: %s" % " ".join(
-                [str(x) for x in tokens]))
-            logger.info("input_ids: %s" %
-                        " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s" %
-                        " ".join([str(x) for x in input_mask]))
-            logger.info(
-                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            logger.info("label: %s (id = %d)" % (example.label, label_id))
-
-        features.append(
-            InputFeatures(input_ids=input_ids,
-                          input_mask=input_mask,
-                          segment_ids=segment_ids,
-                          label_id=label_id))
+    for example in examples:
+        returns.append(pool.apply_async(convert_sample_to_feature, args=(
+            example, label_map, max_seq_length, tokenizer, output_mode), callback=update))
+    pool.close()
+    pool.join()
+    features = [job.get() for job in returns]
     return features
 
 
@@ -200,7 +190,7 @@ def load_dataset(
         task_name, model_name, max_seq_length,
         data_dir, tokenizer, batch_size, eval=False, sample=False,
         return_examples=False, force_reload=False,
-        expected_len=None):
+        expected_len=None, load_only=False):
 
     if eval:
         cached_features_file = os.path.join(data_dir, 'dev_{}_{}_{}'.format(
@@ -231,7 +221,8 @@ def load_dataset(
             pickle.dump(features, writer)
 
     assert len(features) == len(examples)
-
+    if load_only:
+        return
     all_input_ids = torch.tensor(
         [f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor(
