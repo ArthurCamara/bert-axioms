@@ -2,15 +2,17 @@ import csv
 import logging
 import os
 import torch
-from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset)
+from torch.utils.data import (
+    DataLoader, RandomSampler, SequentialSampler, TensorDataset)
 import pickle
 import sys
-from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
+from pytorch_pretrained_bert.optimization import BertAdam
 from tqdm.autonotebook import tqdm
 
 logger = logging.getLogger(__name__)
 
 csv.field_size_limit(sys.maxsize)
+
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
@@ -64,7 +66,7 @@ class DataProcessor(object):
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
             for line in tqdm(reader, desc="Reading input tsv", total=total):
-                if sample and len(lines) >1000:
+                if sample and len(lines) > 1000:
                     return lines
                 lines.append(line)
             return lines
@@ -72,6 +74,7 @@ class DataProcessor(object):
 
 class MsMarcoProcessor(DataProcessor):
     """Processor class for the MsMarco dataset (triples version)."""
+
     def get_train_examples(self, data_dir, sample=False, total=None):
         return self._create_examples(self._read_tsv(
             os.path.join(data_dir, "train-samples.tsv"), sample=sample, total=total), "train", total=total)
@@ -195,7 +198,7 @@ output_modes = {
 
 def load_dataset(
         task_name, model_name, max_seq_length,
-        data_dir, tokenizer, batch_size, eval=False, sample=False, 
+        data_dir, tokenizer, batch_size, eval=False, sample=False,
         return_examples=False, force_reload=False,
         expected_len=None):
 
@@ -211,9 +214,10 @@ def load_dataset(
     if eval:
         examples = processor.get_dev_examples(data_dir, total=expected_len)
     else:
-        examples = processor.get_train_examples(data_dir, sample, total=expected_len)
+        examples = processor.get_train_examples(
+            data_dir, sample, total=expected_len)
 
-    #if cached file already exists, do not reload it.     
+    # if cached file already exists, do not reload it
     if os.path.isfile(cached_features_file) and not force_reload:
         with open(cached_features_file, 'rb') as reader:
             features = pickle.load(reader)
@@ -221,23 +225,29 @@ def load_dataset(
         features = convert_examples_to_features(
             examples, processor.get_labels(),
             max_seq_length, tokenizer, 'classification', total=expected_len)
-        logger.info("Saving features into cached file %s", cached_features_file)
+        logger.info("Saving features into cached file %s",
+                    cached_features_file)
         with open(cached_features_file, 'wb') as writer:
             pickle.dump(features, writer)
-    
+
     assert len(features) == len(examples)
 
-    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
-    data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    all_input_ids = torch.tensor(
+        [f.input_ids for f in features], dtype=torch.long)
+    all_input_mask = torch.tensor(
+        [f.input_mask for f in features], dtype=torch.long)
+    all_segment_ids = torch.tensor(
+        [f.segment_ids for f in features], dtype=torch.long)
+    all_label_ids = torch.tensor(
+        [f.label_id for f in features], dtype=torch.long)
+    data = TensorDataset(all_input_ids, all_input_mask,
+                         all_segment_ids, all_label_ids)
 
     if not eval:
         sampler = RandomSampler(data)
     else:
         sampler = SequentialSampler(data)
-    
+
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
     if return_examples:
@@ -250,13 +260,13 @@ def init_optimizer(model, n_train_steps, learning_rate, warmup_proportion):
     no_decay = ['bias', 'gamma', 'beta']
     num_train_steps = n_train_steps
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if n not in no_decay], 'weight_decay_rate': 0.01},
-        {'params': [p for n, p in param_optimizer if n in no_decay], 'weight_decay_rate': 0.0},
+        {'params': [p for n, p in param_optimizer if n not in no_decay],
+            'weight_decay_rate': 0.01},
+        {'params': [p for n, p in param_optimizer if n in no_decay],
+            'weight_decay_rate': 0.0},
     ]
     optimizer = BertAdam(
         optimizer_grouped_parameters, lr=learning_rate,
         warmup=warmup_proportion,
         t_total=num_train_steps)
     return optimizer
-
-
