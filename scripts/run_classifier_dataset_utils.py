@@ -83,10 +83,9 @@ class MsMarcoProcessor(DataProcessor):
         return self._create_examples(self._read_tsv(
             os.path.join(data_dir, "train-samples.tsv"), sample=sample, total=total), "train", total=total)
 
-    # TODO CHANGE TO ACTUAL FILE. THIS IS A SAMPLE.
     def get_dev_examples(self, data_dir, total=None):
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "small_sample.tsv"), total=total), "dev", total=total)
+            self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv"), total=total), "dev", total=total)
     def get_labels(self):
         return ['0', '1']
 
