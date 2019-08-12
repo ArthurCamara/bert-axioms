@@ -38,54 +38,18 @@ def main():
     args = parser.parse_args()
     output_dir = os.path.join(args.data_dir, "models")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device == "cuda":
-        n_gpu = torch.cuda.device_count()
-    model = BertForNextSentencePrediction.from_pretrained(output_dir)
-    if device == "cuda" and n_gpu > 0:
-        model = torch.nn.DataParallel(model)
     tokenizer = BertTokenizer.from_pretrained(output_dir,
                                               do_lower_case=args.do_lower_case)
-
-    model.to(device)
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
     torch.cuda.manual_seed_all(42)
 
     # loading dataset
-    eval_dataloader, eval_examples = load_dataset(args.task_name, args.bert_model, args.max_seq_length,
-                                                  args.data_dir, tokenizer, args.batch_size, eval=args.eval,
-                                                  return_examples=False, force_reload=args.force_reload,
-                                                  expected_len=args.expected_len)
-
-    # model.eval()
-    # eval_loss = 0
-    # scores = []
-    # classes = []
-    # nb_eval_steps = 0
-
-    # softmax = torch.nn.Softmax(dim=1)
-
-    # for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
-    #     input_ids = input_ids.to(device)
-    #     input_mask = input_mask.to(device)
-    #     segment_ids = segment_ids.to(device)
-    #     label_ids = label_ids.to(device)
-    #     with torch.no_grad():
-    #         outputs = model(input_ids, token_type_ids=segment_ids,
-    #                         next_sentence_label=label_ids)
-    #         predictions = outputs[1]
-    #         eval_loss += np.mean(outputs[0])
-    #         if args.reverse_label:
-    #             scores += list(softmax(predictions)[:, 1].cpu().detach().numpy())
-    #         else:
-    #             scores += list(softmax(predictions)[:, 1].cpu().detach().numpy())
-
-    #         classes += list(torch.argmax(predictions, dim=1).cpu().numpy())
-    #         nb_eval_steps += 1
-
-    # print("final loss is: {}".format(eval_loss / nb_eval_steps))
+    load_dataset(args.task_name, args.bert_model, args.max_seq_length,
+                 args.data_dir, tokenizer, args.batch_size, eval=args.eval,
+                 return_examples=False, force_reload=args.force_reload,
+                 expected_len=args.expected_len, load_only=True)
 
 
 if __name__ == "__main__":
