@@ -39,7 +39,8 @@ def main():
     output_dir = os.path.join(args.data_dir, "models")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    n_gpu = torch.cuda.device_count()
+    if device == "cuda":
+        n_gpu = torch.cuda.device_count()
     model = BertForNextSentencePrediction.from_pretrained(output_dir)
     if device == "cuda" and n_gpu > 0:
         model = torch.nn.DataParallel(model)
