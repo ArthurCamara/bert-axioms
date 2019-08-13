@@ -3,13 +3,13 @@ import logging
 import os
 import torch
 from torch.utils.data import (
-    DataLoader, RandomSampler, SequentialSampler, TensorDataset)
+    DataLoader, RandomSampler, SequentialSampler, TensorDataset, Dataset)
 import pickle
 import sys
 from pytorch_pretrained_bert.optimization import BertAdam
+from pytorch_transformers.tokenization_bert import BertTokenizer
 from tqdm.autonotebook import tqdm
 import multiprocessing
-from copy import deepcopy
 multiprocessing.set_start_method('spawn', True)
 
 
@@ -86,6 +86,7 @@ class MsMarcoProcessor(DataProcessor):
     def get_dev_examples(self, data_dir, total=None):
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "bm25_bert_docs.tsv"), total=total), "dev", total=total)
+
     def get_labels(self):
         return ['0', '1']
 
@@ -100,42 +101,41 @@ class MsMarcoProcessor(DataProcessor):
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
+    def convert_sample_to_feature(example, label_map, max_seq_length, tokenizer, output_mode):
+        tokens_a = tokenizer.tokenize(example.text_a)
+        tokens_b = None
+        if example.text_b:
+            tokens_b = tokenizer.tokenize(example.text_b)
+            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+        else:
+            if len(tokens_a) > max_seq_length - 2:
+                tokens_a = tokens_a[:(max_seq_length - 2)]
+        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+        segment_ids = [0] * len(tokens)
+        if tokens_b:
+            tokens += tokens_b + ["[SEP]"]
+            segment_ids += [1] * (len(tokens_b) + 1)
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        input_mask = [1] * len(input_ids)
+        padding = [0] * (max_seq_length - len(input_ids))
+        input_ids += padding
+        input_mask += padding
+        segment_ids += padding
 
-def convert_sample_to_feature(example, label_map, max_seq_length, tokenizer, output_mode):
-    tokens_a = tokenizer.tokenize(example.text_a)
-    tokens_b = None
-    if example.text_b:
-        tokens_b = tokenizer.tokenize(example.text_b)
-        _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-    else:
-        if len(tokens_a) > max_seq_length - 2:
-            tokens_a = tokens_a[:(max_seq_length - 2)]
-    tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-    segment_ids = [0] * len(tokens)
-    if tokens_b:
-        tokens += tokens_b + ["[SEP]"]
-        segment_ids += [1] * (len(tokens_b) + 1)
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
-    input_mask = [1] * len(input_ids)
-    padding = [0] * (max_seq_length - len(input_ids))
-    input_ids += padding
-    input_mask += padding
-    segment_ids += padding
+        assert len(input_ids) == max_seq_length, "input_id"
+        assert len(input_mask) == max_seq_length, "input_mask"
+        assert len(segment_ids) == max_seq_length, "segment_ids"
 
-    assert len(input_ids) == max_seq_length, "input_id"
-    assert len(input_mask) == max_seq_length, "input_mask"
-    assert len(segment_ids) == max_seq_length, "segment_ids"
-
-    if output_mode == "classification":
-        label_id = label_map[example.label]
-    elif output_mode == "regression":
-        label_id = float(example.label)
-    else:
-        raise KeyError(output_mode)
-    return InputFeatures(input_ids=input_ids,
-                         input_mask=input_mask,
-                         segment_ids=segment_ids,
-                         label_id=label_id)
+        if output_mode == "classification":
+            label_id = label_map[example.label]
+        elif output_mode == "regression":
+            label_id = float(example.label)
+        else:
+            raise KeyError(output_mode)
+        return InputFeatures(input_ids=input_ids,
+                             input_mask=input_mask,
+                             segment_ids=segment_ids,
+                             label_id=label_id)
 
 
 def convert_examples_to_features(examples, label_list, max_seq_length,
@@ -177,14 +177,6 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
             tokens_b.pop()
 
 
-processors = {
-    "msmarco": MsMarcoProcessor
-}
-output_modes = {
-    "msmarco": "classification"
-}
-
-
 def load_dataset(
         task_name, model_name, max_seq_length,
         data_dir, tokenizer, batch_size, eval=False, sample=False,
@@ -199,7 +191,7 @@ def load_dataset(
         cached_features_file = os.path.join(data_dir, 'train_{}_{}_{}'.format(
             list(filter(None, model_name.split("/"))).pop(), str(max_seq_length), task_name))
 
-    processor = processors[task_name]()
+    processor = MsMarcoProcessor()
     if eval:
         examples = processor.get_dev_examples(data_dir, total=expected_len)
     else:
@@ -260,3 +252,110 @@ def init_optimizer(model, n_train_steps, learning_rate, warmup_proportion):
         warmup=warmup_proportion,
         t_total=num_train_steps)
     return optimizer
+
+
+class MsMarcoDataset(Dataset):
+    """MsMarco preprocessing Dataset"""
+
+    def __init__(self, tsv_file, data_dir, max_seq_len=512, size=None, transform=None):
+        """
+        Args:
+            tsv_file (string): TSV file with triples, generated by TREC_run_to_BERT.py, formatted like
+                "qid-did    query   document    label"
+            data_dir (string): Directory with the rest of the data, where we can write to
+            size (int, optional): Number of lines to process. If None, will run wc -l first.
+            transform (callable, optional): Transformations to be performed on the data
+        """
+        self.tsv_path = tsv_file
+        self.data_dir = data_dir
+        self.transform = transform
+        self.max_seq_len = max_seq_len
+        if size is None:
+            with open(tsv_file) as f:
+                for i, _ in enumerate(f):
+                    pass
+            self.size = i + 1
+        else:
+            self.size = size
+
+        self.offset_dict, self.index_dict = self.load_offset_dict()
+        assert os.path.isdir(os.path.join(self.data_dir, "models"))
+        self.tokenizer = BertTokenizer.from_pretrained(
+            os.path.join(self.data_dir, "models"))
+        self.label_map = {label: i for i, label in enumerate(["0", "1"])}
+
+    def load_offset_dict(self):
+        offset_dict = {}
+        index_dict = {}
+        with open(self.tsv_path, encoding="utf-8") as f:
+            pbar = tqdm(total=self.size, desc="Computing offset dictionary")
+            location = f.tell()
+            line = f.readline()
+            pbar.update()
+            idx = 0
+            while line:
+                [did, query, document, label] = line.split("\t")
+                offset_dict[did] = location
+                index_dict[idx] = did
+                location = f.tell()
+                line = f.readline()
+                pbar.update()
+                idx += 1
+
+        return offset_dict, index_dict
+
+    def __getitem__(self, did):
+        if isinstance(did, str):
+            offset = self.offset_dict[did]
+        else:
+            offset = self.offset_dict[self.index_dict[did]]
+        with open(self.tsv_path) as f:
+            f.seek(offset)
+            line = f.readline()
+        return self.text_to_features(line)
+
+    def __len__(self):
+        return self.size
+
+    def _truncate_seq_pair(tokens_a, tokens_b, max_length):
+        """Truncates a sequence pair in place to the maximum length."""
+        while True:
+            total_length = len(tokens_a) + len(tokens_b)
+            if total_length <= max_length:
+                break
+            if len(tokens_a) > len(tokens_b):
+                tokens_a.pop()
+            else:
+                tokens_b.pop()
+
+    def text_to_features(self, sample):
+
+        line = sample.split("/t")
+        text_a = line[1]
+        text_b = line[2]
+        label = line[-1]
+        tokens_a = self.tokenizer.tokenize(text_a)
+        tokens_b = self.tokenizer.tokenize(text_b)
+        _truncate_seq_pair(tokens_a, tokens_b, self.max_seq_len - 3)
+        tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
+        segment_ids = [0] * len(tokens) + [1] * len(tokens_b) + 1
+        input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        input_mask = [1] * len(input_ids)
+        padding = [0] * (self.max_seq_length - len(input_ids))
+        input_ids += padding
+        input_mask += padding
+        segment_ids += padding
+
+        assert len(input_ids) == self.max_seq_length, "input_id"
+        assert len(input_mask) == self.max_seq_length, "input_mask"
+        assert len(segment_ids) == self.max_seq_length, "segment_ids"
+
+        label_id = self.label_map[label]
+
+        return InputFeatures(input_ids=input_ids, input_mask=input_mask, segment_ids=segment_ids, label_id=label_id)
+
+
+if __name__ == "__main__":
+    dataset = MsMarcoDataset(
+        "/ssd2/arthur/TREC2019/data/tiny_sample.tsv", "/ssd2/arthur/TREC2019/data")
+    assert dataset[1] == dataset["174249-D2204704"]

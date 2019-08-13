@@ -155,7 +155,7 @@ def main():
                 optimizer.step()
                 model.zero_grad()
 
-         # Save a trained model, configuration and tokenizer
+        # Save a trained model, configuration and tokenizer
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
 
         # If we save using the predefined names, we can load using `from_pretrained`
@@ -175,10 +175,7 @@ def main():
             args.task_name, args.bert_model, args.max_seq_length,
             args.data_dir, tokenizer, args.eval_batch_size, eval=True)
         model.eval()
-        # eval_loss = 0
-        # nb_eval_steps = 0
-        # preds = []
-        # out_label_ids = None
+
         for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
@@ -188,10 +185,6 @@ def main():
             with torch.no_grad():
                 logits = model(input_ids, segment_ids, input_mask)
             print(logits)
-
-
-
-
 
 
 if __name__ == "__main__":
