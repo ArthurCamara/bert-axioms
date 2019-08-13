@@ -5,7 +5,7 @@ import os
 import random
 import numpy as np
 import torch
-from pytorch_transformers import BertForNextSentencePrediction, BertTokenizer
+from pytorch_transformers import BertTokenizer
 from run_classifier_dataset_utils import load_dataset
 
 logger = logging.getLogger(__name__)
