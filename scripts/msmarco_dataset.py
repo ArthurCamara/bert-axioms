@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from pytorch_transformers import BertTokenizer
 from tqdm.auto import tqdm
 import multiprocessing
+import yappi
 multiprocessing.set_start_method('spawn', True)
 
 
@@ -125,9 +126,12 @@ class MsMarcoDataset(Dataset):
         return torch.Tensor(input_ids), torch.Tensor(input_mask), torch.Tensor(segment_ids), torch.Tensor([label_id])
 
 if __name__ == "__main__":
+    yappi.start()
     dataset = MsMarcoDataset(
         "/ssd2/arthur/TREC2019/data/small_sample.tsv", "/ssd2/arthur/TREC2019/data")
     data_loader = DataLoader(
-        dataset, batch_size=32, shuffle=True)
-    for  (input_ids, input_masks, segment_ids, label_ids) in tqdm(data_loader):
+        dataset, batch_size=32, shuffle=True, num_workers=4)
+    for  (input_ids, input_masks, segment_ids, label_ids) in tqdm(data_loader, desc="Batches"):
         pass
+    yappi.get_func_stats().print_all()
+    yappi.get_thread_stats().print_all()
