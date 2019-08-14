@@ -55,8 +55,11 @@ def main():
     # Generated BERT-Formatted triples
     trec_run_to_bert(output_path, args.data_home, 'train', line_counter_train, args.k)
 
-    # Run feature extraction for training. This may take a while.
-    # train_dataloader = load_data
+    # Dataset loader
+    train_path = get_path("tiny_sample.tsv")
+    train_dataset = MsMarcoDataset(train_path, args.data_dir)
+
+    # Fine tune model
 
 
 if __name__ == "__main__":

@@ -1,17 +1,20 @@
 import os
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import Dataset, DataLoader
 from pytorch_transformers import BertTokenizer
 from tqdm.auto import tqdm
+import multiprocessing
+multiprocessing.set_start_method('spawn', True)
 
 
 class InputFeatures(object):
     """A single set of features of data."""
 
     def __init__(self, input_ids, input_mask, segment_ids, label_id):
-        self.input_ids = input_ids
-        self.input_mask = input_mask
-        self.segment_ids = segment_ids
-        self.label_id = label_id
+        self.input_ids = torch.Tensor(input_ids)
+        self.input_mask = torch.Tensor(input_mask)
+        self.segment_ids = torch.Tensor(segment_ids)
+        self.label_id = torch.Tensor(label_id)
 
 
 class MsMarcoDataset(Dataset):
@@ -80,7 +83,7 @@ class MsMarcoDataset(Dataset):
     def __len__(self):
         return self.size
 
-    def _truncate_seq_pair(tokens_a, tokens_b, max_length):
+    def _truncate_seq_pair(self, tokens_a, tokens_b, max_length):
         """Truncates a sequence pair in place to the maximum length."""
         while True:
             total_length = len(tokens_a) + len(tokens_b)
@@ -119,12 +122,12 @@ class MsMarcoDataset(Dataset):
         assert len(segment_ids) == self.max_seq_len, "segment_ids"
 
         label_id = self.label_map[label]
-
-        return InputFeatures(input_ids=input_ids, input_mask=input_mask, segment_ids=segment_ids, label_id=label_id)
-
+        return torch.Tensor(input_ids), torch.Tensor(input_mask), torch.Tensor(segment_ids), torch.Tensor([label_id])
 
 if __name__ == "__main__":
     dataset = MsMarcoDataset(
-        "/ssd2/arthur/TREC2019/data/tiny_sample.tsv", "/ssd2/arthur/TREC2019/data")
-    assert dataset[1].input_ids == dataset["174249-D2204704"].input_ids
-    print(dataset[1])
+        "/ssd2/arthur/TREC2019/data/small_sample.tsv", "/ssd2/arthur/TREC2019/data")
+    data_loader = DataLoader(
+        dataset, batch_size=32, shuffle=True)
+    for  (input_ids, input_masks, segment_ids, label_ids) in tqdm(data_loader):
+        pass
