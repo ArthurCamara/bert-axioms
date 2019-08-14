@@ -12,10 +12,10 @@ class InputFeatures(object):
     """A single set of features of data."""
 
     def __init__(self, input_ids, input_mask, segment_ids, label_id):
-        self.input_ids = torch.Tensor(input_ids)
-        self.input_mask = torch.Tensor(input_mask)
-        self.segment_ids = torch.Tensor(segment_ids)
-        self.label_id = torch.Tensor(label_id)
+        self.input_ids = torch.Tensor(input_ids, dtype=torch.long)
+        self.input_mask = torch.Tensor(input_mask, dtype=torch.long)
+        self.segment_ids = torch.Tensor(segment_ids, dtype=torch.long)
+        self.label_id = torch.Tensor(label_id, dtype=torch.long)
 
 
 class MsMarcoDataset(Dataset):
