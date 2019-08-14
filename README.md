@@ -9,8 +9,10 @@ What can we extract from deep models to use back in more traditional IR settings
 4. We need to find a technique that allows us to extract retrieval heuristics from trained deep models.
 5. We need to inject those novel heuristics into traditional models and investigate whether the retrieval effectiveness improves.
 
-Overall, we want better traditional models that do not rely on training data by exploiting insights from deep models.
+## Goal
+We want better traditional models that do not rely on training data by exploiting insights from deep models.
 
+## Main contribution
 Our research contribution is the move from trained deep model to retrieval heuristic(s).
 
 ## Related work
