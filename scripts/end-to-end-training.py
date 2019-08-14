@@ -5,6 +5,7 @@ import logging
 import subprocess
 import os
 from TREC_run_to_BERT import trec_run_to_bert
+from msmarco_dataset import MsMarcoDataset
 
 
 def main():
