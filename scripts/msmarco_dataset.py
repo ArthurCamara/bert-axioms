@@ -123,7 +123,12 @@ class MsMarcoDataset(Dataset):
         assert len(segment_ids) == self.max_seq_len, "segment_ids"
 
         label_id = self.label_map[label]
-        return torch.Tensor(input_ids), torch.Tensor(input_mask), torch.Tensor(segment_ids), torch.Tensor([label_id])
+        return (
+            torch.tensor(input_ids, dtype=torch.long),
+            torch.tensor(input_mask, dtype=torch.long),
+            torch.tensor(segment_ids, dtype=torch.long),
+            torch.tensor([label_id], dtype=torch.long))
+
 
 if __name__ == "__main__":
     yappi.start()
@@ -131,7 +136,7 @@ if __name__ == "__main__":
         "/ssd2/arthur/TREC2019/data/small_sample.tsv", "/ssd2/arthur/TREC2019/data")
     data_loader = DataLoader(
         dataset, batch_size=32, shuffle=True, num_workers=4)
-    for  (input_ids, input_masks, segment_ids, label_ids) in tqdm(data_loader, desc="Batches"):
+    for (input_ids, input_masks, segment_ids, label_ids) in tqdm(data_loader, desc="Batches"):
         pass
     yappi.get_func_stats().print_all()
     yappi.get_thread_stats().print_all()

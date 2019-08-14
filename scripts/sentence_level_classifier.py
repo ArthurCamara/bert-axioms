@@ -65,7 +65,7 @@ def fine_tune(
     if n_workers is None:
         n_workers = multiprocessing.cpu_count() - 2
     data_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+        dataset, batch_size=batch_size, shuffle=True, num_workers=0 )
     num_train_optimization_steps = len(data_loader) // n_epochs
 
     optimizer, scheduler = init_optimizer(
@@ -93,13 +93,10 @@ def fine_tune(
                       'next_sentence_label': batch[3]}
             outputs = model(**inputs)
             loss = outputs[0]
+            print(loss)
 
 
 if __name__ == "__main__":
     dataset = MsMarcoDataset(
         "/ssd2/arthur/TREC2019/data/small_sample.tsv", "/ssd2/arthur/TREC2019/data")
-    yappi.set_clock_type("wall")
-    yappi.start()
     fine_tune(dataset)
-    yappi.get_func_stats().print_all()
-    yappi.get_thread_stats().print_all()

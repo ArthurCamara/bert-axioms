@@ -59,7 +59,7 @@ def main():
     train_path = get_path("tiny_sample.tsv")
     train_dataset = MsMarcoDataset(train_path, args.data_dir)
 
-    # Fine tune model
+    # Fine tune 
 
 
 if __name__ == "__main__":
