@@ -49,7 +49,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines):
     tokenizer = BertTokenizer.from_pretrained(
         os.path.join(data_home, "models"))
     output_line_format = "{}-{}\t{}\t{}\n"
-    with open("/ssd2/arthur/TREC2019/data/{}-triples.{}".format(split, chunk_no), 'w', encoding='utf-8') as outf:
+    with open("{}/{}-triples.{}".format(args.data_home, args.split, chunk_no), 'w', encoding='utf-8') as outf:
         for line in tqdm(lines):
             [topic_id, _, doc_id, ranking, score, _] = line.split()
             is_relevant = doc_id in qrel[topic_id]
@@ -139,9 +139,11 @@ if __name__ == "__main__":
                     qrel[topicid] = [docid]
     # pre-process positions for each chunk
     cpus = mp.cpu_count()
+    print("running with {} cpus".format(cpus))
     number_of_chunks = cpus
     block_offset = dict()
     lines_per_chunk = number_of_lines_to_process // cpus
+    print("{}  lines per chunk".format(lines_per_chunk))
     excess_lines = number_of_lines_to_process % cpus
     start = 0
     with open(run_file) as f:
