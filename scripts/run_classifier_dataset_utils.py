@@ -145,7 +145,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     label_map = {label: i for i, label in enumerate(label_list)}
 
     returns = []
-    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    pool = multiprocessing.Pool(64)
     pbar = tqdm(total=total)
 
     def update(*a):
