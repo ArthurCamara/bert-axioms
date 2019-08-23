@@ -48,7 +48,7 @@ def getcontent(docid, f, docoffset):
     return line.rstrip()
 
 
-def trec_run_to_bert(run_file, data_home, split, run_file_len=None, top_k=100):
+def TRECrun_to_BERT(run_file, data_home, split, run_file_len=None, top_k=100):
     queries_file = os.path.join(
         data_home, f"msmarco-doc{split}-queries.tsv.gz")
     lookup_file = os.path.join(data_home, "msmarco-docs-lookup.tsv.gz")
@@ -89,5 +89,5 @@ if __name__ == "__main__":
     parser.add_argument("--top_k", default=100, type=int,
                         help="TOP-k documents that were used.")
     args = parser.parse_args()
-    trec_run_to_bert(args.run_file, args.data_home,
+    TRECrun_to_BERT(args.run_file, args.data_home,
                      args.split, args.run_file_len, args.top_k)
