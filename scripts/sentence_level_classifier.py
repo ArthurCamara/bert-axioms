@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 import multiprocessing
 from sklearn.metrics import f1_score
+from args_parser import getArgs
+import os
 
 
 logger = logging.getLogger(__name__)
@@ -37,17 +39,18 @@ def init_optimizer(
 
 
 def fine_tune(
-        dataset: MsMarcoDataset,
+        train_dataset: MsMarcoDataset,
+        dev_dataset: MsMarcoDataset,
         data_dir,
         seed: int = 42,
         limit_gpus: int = -1,
         bert_model="bert-base-uncased",
         batch_size=32,
+        eval_batch_size=128,
         n_epochs=3,
         learning_rate=5e-5,
         n_workers=None):
-
-    # Seed random seeds
+    # Set random seeds
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -68,7 +71,7 @@ def fine_tune(
     if n_workers is None:
         n_workers = multiprocessing.cpu_count() - 2
     data_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
     num_train_optimization_steps = len(data_loader) // n_epochs
 
     optimizer, scheduler = init_optimizer(
@@ -78,7 +81,7 @@ def fine_tune(
         model = torch.nn.DataParallel(n_gpu)
     model.to(device)
     logger.info("******Started trainning******")
-    logger.info("   Num samples = %d", len(dataset))
+    logger.info("   Num samples = %d", len(train_dataset))
     logger.info("   Num Epochs = %d", n_epochs)
     logger.info("   Batch size = %d", batch_size)
     logger.info("   Total optmization steps %d", num_train_optimization_steps)
@@ -108,17 +111,34 @@ def fine_tune(
             model.zero_grad()
             global_step += 1
             if global_step % 50 == 0:
-                results = evaluate(dataset,
+                results = evaluate(dev_dataset,
                                    data_dir,
                                    model,
                                    device,
+                                   data_dir,
+                                   eval_batchsize=eval_batch_size,
                                    n_workers=n_workers)
+                for key, value in results.items():
+                    print('\teval_{}:\t{}'.format(key, value))
+                print("\tlr: \t{}".format(scheduler.get_lr()[0]))
+                print("\tLoss:\t{}".format(tr_loss - logging_loss) / 50)
+                logging_loss = tr_loss
+                # Save model
+                output_dir = os.path.join(data_dir, "checkpoint-{}".format(global_step))
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                model_to_save = model.module if hasattr(model, 'module') else model
+                model_to_save.save_pretrained(output_dir)
+                torch.save(args, os.path.join(output_dir, 'training_args.bin'))
+                logger.info("Saving model checkpoint to %s", output_dir)
+    return global_step, tr_loss / global_step
 
 
 def evaluate(eval_dataset: MsMarcoDataset,
              output_dir: str,
              model: BertForNextSentencePrediction,
              device: str,
+             eval_output_dir: str,
              task_name="msmarco",
              prefix="",
              eval_batchsize=32,
@@ -146,7 +166,8 @@ def evaluate(eval_dataset: MsMarcoDataset,
         nb_eval_steps += 1
         if preds is None:
             preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs['next_sentence_label'].detach().cpu().numpy()
+            out_label_ids = inputs['next_sentence_label'].detach(
+            ).cpu().numpy()
         else:
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
             out_label_ids = np.append(
@@ -159,13 +180,22 @@ def evaluate(eval_dataset: MsMarcoDataset,
         result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
         result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
         results.update(result)
+        output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
+        with open(output_eval_file, "w") as writer:
+            logger.info("***** Eval results {} *****".format(prefix))
+            for key in sorted(result.keys()):
+                logger.info("  %s = %s", key, str(result[key]))
+                writer.write("%s = %s\n" % (key, str(result[key])))
 
-        
-            
+    return results
 
 
 if __name__ == "__main__":
-    train_dataset = MsMarcoDataset(
-        "/ssd2/arthur/TREC2019/data/small_sample.tsv",
-        "/ssd2/arthur/TREC2019/data")
-    fine_tune(train_dataset, "/ssd2/arthur/TREC2019/data")
+    argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
+            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.1",
+            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.1",
+            "--bert-model", "bert-base-uncased"]
+args = getArgs(argv)
+train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
+dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
+fine_tune(train_dataset, dev_dataset, args.data_dir, n_workers=0)

@@ -8,7 +8,7 @@ import sys
 from msmarco_dataset import MsMarcoDataset
 from trecrun_to_bert import TRECrun_to_BERT
 from args_parser import getArgs
-
+from sentence_level_classifier import fine_tune
 
 def get_path(home_dir, x):
     return os.path.join(home_dir, x)
@@ -56,11 +56,8 @@ def main():
                            args.anserini_path, args.overwrite)
 
     # Dataset loader
-    if args.train_file is not None:
-        train_path = args.train_file
-    else:
-        train_path = get_path(args.data_dir, "tiny_sample.tsv")
-    train_dataset = MsMarcoDataset(train_path, args.data_dir)
+    # train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
+    # dev_dataset  = MsMarcoDataset(args.dev_file, args.data_dir)
 
     # Fine tune
 

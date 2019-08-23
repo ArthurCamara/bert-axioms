@@ -7,16 +7,6 @@ import multiprocessing
 multiprocessing.set_start_method('spawn', True)
 
 
-class InputFeatures(object):
-    """A single set of features of data."""
-
-    def __init__(self, input_ids, input_mask, segment_ids, label_id):
-        self.input_ids = torch.Tensor(input_ids, dtype=torch.long)
-        self.input_mask = torch.Tensor(input_mask, dtype=torch.long)
-        self.segment_ids = torch.Tensor(segment_ids, dtype=torch.long)
-        self.label_id = torch.Tensor(label_id, dtype=torch.long)
-
-
 class MsMarcoDataset(Dataset):
     """MsMarco preprocessing Dataset"""
 
@@ -97,17 +87,6 @@ class MsMarcoDataset(Dataset):
     def __len__(self):
         return self.size
 
-    def _truncate_seq_pair(self, tokens_a, tokens_b, max_length):
-        """Truncates a sequence pair in place to the maximum length."""
-        while True:
-            total_length = len(tokens_a) + len(tokens_b)
-            if total_length <= max_length:
-                break
-            if len(tokens_a) > len(tokens_b):
-                tokens_a.pop()
-            else:
-                tokens_b.pop()
-
     def text_to_features(self, sample):
 
         line = sample.strip().split("\t")
@@ -117,7 +96,7 @@ class MsMarcoDataset(Dataset):
         sep_index = tokens.index("[SEP]")
 
         tokens_a = tokens[1:sep_index]
-        tokens_b = tokens[sep_index+1:-1]
+        tokens_b = tokens[sep_index + 1:-1]
 
         segment_ids = [0] * (len(tokens_a) + 2)
         segment_ids += [1] * (len(tokens_b) + 1)
