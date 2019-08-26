@@ -1,198 +1,219 @@
-from __future__ import absolute_import, division, print_function
-
-import argparse
-import logging
-import os
+from msmarco_dataset import MsMarcoDataset
+from pytorch_transformers import (BertForNextSentencePrediction,
+                                  AdamW, WarmupLinearSchedule)
 import random
-from tqdm.autonotebook import tqdm, trange
-
-
 import numpy as np
-
 import torch
-
-from pytorch_pretrained_bert.file_utils import WEIGHTS_NAME, CONFIG_NAME
-from pytorch_pretrained_bert.modeling import BertForNextSentencePrediction
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-
-from run_classifier_dataset_utils import load_dataset, init_optimizer
+import logging
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
+import multiprocessing
+from sklearn.metrics import f1_score
+from args_parser import getArgs
+import os
 
 
 logger = logging.getLogger(__name__)
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def init_optimizer(
+        model: BertForNextSentencePrediction,
+        n_steps, lr,
+        warmup_proportion=0.1,
+        weight_decay=0.0):
 
-    # Required parameters
-    parser.add_argument("--data_dir",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
-    parser.add_argument("--bert_model", default='bert-base-uncased', type=str, required=True,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                        "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
-                        "bert-base-multilingual-cased, bert-base-chinese.")
-    parser.add_argument("--task_name",
-                        default='rte',
-                        type=str,
-                        required=True,
-                        help="The name of the task to train.")
-    parser.add_argument("--output_dir",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The output directory where the model predictions and checkpoints will be written.")
+    no_decay = ['bias', 'LayerNorm.weight']
 
-    # Other parameters
-    parser.add_argument("--cache_dir",
-                        default="",
-                        type=str,
-                        help="Where do you want to store the pre-trained models downloaded from s3")
-    parser.add_argument("--max_seq_length",
-                        default=128,
-                        type=int,
-                        help="The maximum total input sequence length after WordPiece tokenization. \n"
-                             "Sequences longer than this will be truncated, and sequences shorter \n"
-                             "than this will be padded.")
-    parser.add_argument("--do_train",
-                        action='store_true',
-                        help="Whether to run training.")
-    parser.add_argument("--do_eval",
-                        action='store_true',
-                        help="Whether to run eval on the dev set.")
-    parser.add_argument("--do_lower_case",
-                        action='store_true',
-                        help="Set this flag if you are using an uncased model.")
-    parser.add_argument("--train_batch_size",
-                        default=32,
-                        type=int,
-                        help="Total batch size for training.")
-    parser.add_argument("--eval_batch_size",
-                        default=8,
-                        type=int,
-                        help="Total batch size for eval.")
-    parser.add_argument("--learning_rate",
-                        default=5e-5,
-                        type=float,
-                        help="The initial learning rate for Adam.")
-    parser.add_argument("--num_train_epochs",
-                        default=3.0,
-                        type=float,
-                        help="Total number of training epochs to perform.")
-    parser.add_argument("--warmup_proportion",
-                        default=0.1,
-                        type=float,
-                        help="Proportion of training to perform linear learning rate warmup for. "
-                             "E.g., 0.1 = 10%% of training.")
-    parser.add_argument("--no_cuda",
-                        action='store_true',
-                        help="Whether not to use CUDA when available")
-    parser.add_argument('--overwrite_output_dir',
-                        action='store_true',
-                        help="Overwrite the content of the output directory")
-    parser.add_argument("--local_rank",
-                        type=int,
-                        default=-1,
-                        help="local_rank for distributed training on gpus")
-    parser.add_argument('--seed',
-                        type=int,
-                        default=42,
-                        help="random seed for initialization")
-    parser.add_argument('--gradient_accumulation_steps',
-                        type=int,
-                        default=1,
-                        help="Number of updates steps to accumulate before performing a backward/update pass.")
-    parser.add_argument('--fp16',
-                        action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
-    parser.add_argument('--loss_scale',
-                        type=float, default=0,
-                        help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
-                             "0 (default value): dynamic loss scaling.\n"
-                             "Positive power of 2: static loss scaling value.\n")
-    parser.add_argument("--sample_run", action='store_true', help="run on a smaller dataset")
-    args = parser.parse_args()
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(
+            nd in n for nd in no_decay)], 'weight_decay': weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(
+            nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
 
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    optimizer = AdamW(optimizer_grouped_parameters, lr=lr, eps=1e-8)
+    warmup_steps = n_steps * warmup_proportion
+    scheduler = WarmupLinearSchedule(
+        optimizer, warmup_steps=warmup_steps, t_total=n_steps)
+    return optimizer, scheduler
+
+
+def fine_tune(
+        train_dataset: MsMarcoDataset,
+        dev_dataset: MsMarcoDataset,
+        data_dir,
+        seed: int = 42,
+        limit_gpus: int = -1,
+        bert_model="bert-base-uncased",
+        batch_size=32,
+        eval_batch_size=128,
+        n_epochs=3,
+        learning_rate=5e-5,
+        n_workers=None,
+        eval_steps = 50):
+    # Set random seeds
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # Set CUDA
     n_gpu = 0
     if torch.cuda.is_available():
-        print("using CUDA")
-        torch.cuda.manual_seed_all(args.seed)
-        n_gpu = torch.cuda.device_count()
+        logging.info("Using CUDA")
+        torch.cuda.manual_seed_all(seed)
+        if limit_gpus < 0:
+            limit_gpus = torch.cuda.device_count()
+        if limit_gpus > -1:
+            n_gpu = min(torch.cuda.device_count(), limit_gpus)
 
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    device = torch.device("cuda" if (torch.cuda.is_available()
+                                     and n_gpu > 0 and limit_gpus != 1) else "cpu")
+    logging.info("Using device {}".format(device))
+    model = BertForNextSentencePrediction.from_pretrained(bert_model)
+    logging.info("Model loaded")
+    if n_workers is None:
+        n_workers = multiprocessing.cpu_count() - 2
+    data_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
+    num_train_optimization_steps = len(data_loader) // n_epochs
 
-    print("Using device {}".format(device))
-    model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
-    if n_gpu > 1:
-        model = torch.nn.DataParallel(model)
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model)
+    optimizer, scheduler = init_optimizer(
+        model, num_train_optimization_steps, learning_rate)
+
+    if n_gpu > 0:
+        gpu_ids = list(range(n_gpu))
+        # TODO REMOVE THIS
+        gpu_ids.remove(5)
+        model = torch.nn.DataParallel(model, device_ids=gpu_ids)
+        print("Using device IDs {}".format(str(gpu_ids)))
+
     model.to(device)
-    print("model loaded to device")
+    logger.info("******Started trainning******")
+    logger.info("   Num samples = %d", len(train_dataset))
+    logger.info("   Num Epochs = %d", n_epochs)
+    logger.info("   Batch size = %d", batch_size)
+    logger.info("   Total optmization steps %d", num_train_optimization_steps)
 
-    if args.do_train:
-        train_dataloader = load_dataset(
-            args.task_name, args.bert_model, args.max_seq_length,
-            args.data_dir, tokenizer, args.train_batch_size, sample=args.sample_run)
-        num_train_optimization_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-        optimizer = init_optimizer(model, num_train_optimization_steps,
-                                   args.learning_rate, args.warmup_proportion)
+    global_step = 0
+    tr_loss, logging_loss = 0.0, 0.0
+    model.zero_grad()
+    for _ in tqdm(range(n_epochs), desc="Epochs"):
+        for batch in tqdm(data_loader, desc="Batches"):
+            model.train()
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {'input_ids': batch[0],
+                      'attention_mask': batch[1],
+                      'token_type_ids': batch[2],
+                      'next_sentence_label': batch[3]}
+            outputs = model(**inputs)
 
-        model.train()
-        for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            tr_loss = 0
-            for _, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-                batch = tuple(t.to(device) for t in batch)
-                input_ids, input_mask, segment_ids, label_ids = batch
-                loss = model(input_ids, segment_ids, input_mask, label_ids)
+            loss = outputs[0]
+            if n_gpu > 1:
                 loss = loss.mean()
-                loss.backward()
-                tr_loss += loss.item()
-                optimizer.step()
-                model.zero_grad()
+            print(loss)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-         # Save a trained model, configuration and tokenizer
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+            tr_loss += loss.item()
+            scheduler.step()
+            optimizer.step()
+            model.zero_grad()
+            global_step += 1
+            if global_step % eval_steps == 0:
+                results = evaluate(dev_dataset,
+                                   data_dir,
+                                   model,
+                                   device,
+                                   data_dir,
+                                   eval_batchsize=eval_batch_size,
+                                   n_workers=n_workers)
+                for key, value in results.items():
+                    print('\teval_{}:\t{}'.format(key, value))
+                print("\tlr: \t{}".format(scheduler.get_lr()[0]))
+                print("\tLoss:\t{}".format(tr_loss - logging_loss / eval_steps))
+                logging_loss = tr_loss
+                # Save model
+                output_dir = os.path.join(
+                    data_dir, "checkpoint-{}".format(global_step))
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                model_to_save = model.module if hasattr(
+                    model, 'module') else model
+                model_to_save.save_pretrained(output_dir)
+                torch.save(args, os.path.join(output_dir, 'training_args.bin'))
+                logger.info("Saving model checkpoint to %s", output_dir)
+    return global_step, tr_loss / global_step
 
-        # If we save using the predefined names, we can load using `from_pretrained`
-        output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
-        output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
-        torch.save(model_to_save.state_dict(), output_model_file)
-        model_to_save.config.to_json_file(output_config_file)
-        tokenizer.save_vocabulary(args.output_dir)
 
-    if args.do_eval:
-        model = BertForNextSentencePrediction.from_pretrained(args.output_dir)
-        tokenizer = BertTokenizer.from_pretrained(
-            args.output_dir, do_lower_case=args.do_lower_case)
-        model.to(device)
-
-        eval_dataloader = load_dataset(
-            args.task_name, args.bert_model, args.max_seq_length,
-            args.data_dir, tokenizer, args.eval_batch_size, eval=True)
+def evaluate(eval_dataset: MsMarcoDataset,
+             output_dir: str,
+             model: BertForNextSentencePrediction,
+             device: str,
+             eval_output_dir: str,
+             task_name="msmarco",
+             prefix="",
+             eval_batchsize=32,
+             n_workers=2):
+    results = {}
+    eval_dataloader = DataLoader(
+        eval_dataset, batch_size=eval_batchsize, shuffle=False, num_workers=n_workers)
+    eval_loss = 0.0
+    nb_eval_steps = 0
+    preds = None
+    out_label_ids = None
+    for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
-        # eval_loss = 0
-        # nb_eval_steps = 0
-        # preds = []
-        # out_label_ids = None
-        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
-            input_ids = input_ids.to(device)
-            input_mask = input_mask.to(device)
-            segment_ids = segment_ids.to(device)
-            label_ids = label_ids.to(device)
+        batch = tuple(t.to(device) for t in batch)
+        with torch.no_grad():
+            inputs = {
+                'input_ids': batch[0],
+                'attention_mask': batch[1],
+                'token_type_ids': batch[2],
+                'next_sentence_label': batch[3]
+            }
+            outputs = model(**inputs)
+            tmp_eval_loss, logits = outputs[:2]
+            eval_loss += tmp_eval_loss.mean().item()
+        nb_eval_steps += 1
+        if preds is None:
+            preds = logits.detach().cpu().numpy()
+            out_label_ids = inputs['next_sentence_label'].detach(
+            ).cpu().numpy()
+        else:
+            batch_predictions = logits.detach().cpu().numpy()
+            preds = np.append(preds, batch_predictions, axis=0)
+            out_label_ids = np.append(
+                out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy(), axis=0)
+        eval_loss = eval_loss / nb_eval_steps
+    preds = np.argmax(preds, axis=1)
+    assert len(preds) == len(out_label_ids)
+    result = {}
+    result["acc"] = (preds == out_label_ids).mean()
+    result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
+    result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
+    results.update(result)
+    output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
+    with open(output_eval_file, "w") as writer:
+        logger.info("***** Eval results {} *****".format(prefix))
+        for key in sorted(result.keys()):
+            logger.info("  %s = %s", key, str(result[key]))
+            writer.write("%s = %s\n" % (key, str(result[key])))
 
-            with torch.no_grad():
-                logits = model(input_ids, segment_ids, input_mask)
-            print(logits)
-
-
-
-
+    return results
 
 
 if __name__ == "__main__":
-    main()
+    argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
+            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.sample",
+            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.sample",
+            "--bert_model", "bert-base-uncased",
+            "--limit_gpus", "1",
+            "--train_batch_size", "32"]
+args = getArgs(argv)
+# limit_gpus = args.limit_gpus
+train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
+dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
+fine_tune(train_dataset, dev_dataset, args.data_dir,
+          limit_gpus=-1,
+          n_workers=0,
+          batch_size=args.train_batch_size)
