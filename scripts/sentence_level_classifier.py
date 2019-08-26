@@ -49,7 +49,8 @@ def fine_tune(
         eval_batch_size=128,
         n_epochs=3,
         learning_rate=5e-5,
-        n_workers=None):
+        n_workers=None,
+        eval_steps = 50):
     # Set random seeds
     random.seed(seed)
     np.random.seed(seed)
@@ -60,11 +61,13 @@ def fine_tune(
     if torch.cuda.is_available():
         logging.info("Using CUDA")
         torch.cuda.manual_seed_all(seed)
+        if limit_gpus < 0:
+            limit_gpus = torch.cuda.device_count()
         if limit_gpus > -1:
-            n_gpu = torch.cuda.device_count()
+            n_gpu = min(torch.cuda.device_count(), limit_gpus)
 
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          and limit_gpus > 0 else "cpu")
+    device = torch.device("cuda" if (torch.cuda.is_available()
+                                     and n_gpu > 0 and limit_gpus != 1) else "cpu")
     logging.info("Using device {}".format(device))
     model = BertForNextSentencePrediction.from_pretrained(bert_model)
     logging.info("Model loaded")
@@ -77,8 +80,13 @@ def fine_tune(
     optimizer, scheduler = init_optimizer(
         model, num_train_optimization_steps, learning_rate)
 
-    if n_gpu > 1:
-        model = torch.nn.DataParallel(n_gpu)
+    if n_gpu > 0:
+        gpu_ids = list(range(n_gpu))
+        # TODO REMOVE THIS
+        gpu_ids.remove(5)
+        model = torch.nn.DataParallel(model, device_ids=gpu_ids)
+        print("Using device IDs {}".format(str(gpu_ids)))
+
     model.to(device)
     logger.info("******Started trainning******")
     logger.info("   Num samples = %d", len(train_dataset))
@@ -98,10 +106,11 @@ def fine_tune(
                       'token_type_ids': batch[2],
                       'next_sentence_label': batch[3]}
             outputs = model(**inputs)
+
             loss = outputs[0]
-            print(loss)
             if n_gpu > 1:
                 loss = loss.mean()
+            print(loss)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
@@ -110,7 +119,7 @@ def fine_tune(
             optimizer.step()
             model.zero_grad()
             global_step += 1
-            if global_step % 50 == 0:
+            if global_step % eval_steps == 0:
                 results = evaluate(dev_dataset,
                                    data_dir,
                                    model,
@@ -121,13 +130,15 @@ def fine_tune(
                 for key, value in results.items():
                     print('\teval_{}:\t{}'.format(key, value))
                 print("\tlr: \t{}".format(scheduler.get_lr()[0]))
-                print("\tLoss:\t{}".format(tr_loss - logging_loss) / 50)
+                print("\tLoss:\t{}".format(tr_loss - logging_loss / eval_steps))
                 logging_loss = tr_loss
                 # Save model
-                output_dir = os.path.join(data_dir, "checkpoint-{}".format(global_step))
+                output_dir = os.path.join(
+                    data_dir, "checkpoint-{}".format(global_step))
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
-                model_to_save = model.module if hasattr(model, 'module') else model
+                model_to_save = model.module if hasattr(
+                    model, 'module') else model
                 model_to_save.save_pretrained(output_dir)
                 torch.save(args, os.path.join(output_dir, 'training_args.bin'))
                 logger.info("Saving model checkpoint to %s", output_dir)
@@ -169,33 +180,40 @@ def evaluate(eval_dataset: MsMarcoDataset,
             out_label_ids = inputs['next_sentence_label'].detach(
             ).cpu().numpy()
         else:
-            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+            batch_predictions = logits.detach().cpu().numpy()
+            preds = np.append(preds, batch_predictions, axis=0)
             out_label_ids = np.append(
                 out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy(), axis=0)
         eval_loss = eval_loss / nb_eval_steps
-        preds = np.argmax(preds, axis=1)
-        assert len(preds) == len(out_label_ids)
-        result = {}
-        result["acc"] = (preds == out_label_ids).mean()
-        result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
-        result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
-        results.update(result)
-        output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
-        with open(output_eval_file, "w") as writer:
-            logger.info("***** Eval results {} *****".format(prefix))
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
+    preds = np.argmax(preds, axis=1)
+    assert len(preds) == len(out_label_ids)
+    result = {}
+    result["acc"] = (preds == out_label_ids).mean()
+    result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
+    result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
+    results.update(result)
+    output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
+    with open(output_eval_file, "w") as writer:
+        logger.info("***** Eval results {} *****".format(prefix))
+        for key in sorted(result.keys()):
+            logger.info("  %s = %s", key, str(result[key]))
+            writer.write("%s = %s\n" % (key, str(result[key])))
 
     return results
 
 
 if __name__ == "__main__":
     argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
-            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.1",
-            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.1",
-            "--bert-model", "bert-base-uncased"]
+            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.sample",
+            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.sample",
+            "--bert_model", "bert-base-uncased",
+            "--limit_gpus", "1",
+            "--train_batch_size", "32"]
 args = getArgs(argv)
+# limit_gpus = args.limit_gpus
 train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
 dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
-fine_tune(train_dataset, dev_dataset, args.data_dir, n_workers=0)
+fine_tune(train_dataset, dev_dataset, args.data_dir,
+          limit_gpus=-1,
+          n_workers=0,
+          batch_size=args.train_batch_size)

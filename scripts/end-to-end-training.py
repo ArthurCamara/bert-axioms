@@ -1,14 +1,13 @@
 """This script implements an end-to-end feature extraction and training for MSMarco dataset."""
 
-import argparse
 import logging
 import subprocess
 import os
-import sys
 from msmarco_dataset import MsMarcoDataset
 from trecrun_to_bert import TRECrun_to_BERT
 from args_parser import getArgs
 from sentence_level_classifier import fine_tune
+
 
 def get_path(home_dir, x):
     return os.path.join(home_dir, x)
@@ -46,8 +45,12 @@ def run_retrieval_step(data_dir, k, anserini_path, overwrite=False):
 
 
 def main():
-    print(sys.argv)
-    args = getArgs(sys.argv[1:])
+    argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
+            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.1",
+            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.1",
+            "--bert-model", "bert-base-uncased"]
+
+    args = getArgs(argv)
 
     logging.basicConfig(level=logging.getLevelName(args.log_level))
 
@@ -56,10 +59,11 @@ def main():
                            args.anserini_path, args.overwrite)
 
     # Dataset loader
-    # train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
-    # dev_dataset  = MsMarcoDataset(args.dev_file, args.data_dir)
+    train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
+    dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
 
     # Fine tune
+    fine_tune(train_dataset, dev_dataset, args.data_dir, n_workers=0)
 
 
 if __name__ == "__main__":

@@ -19,14 +19,16 @@ def getArgs(argv=None):
                         help="Train file path to be used")
     parser.add_argument("--dev_file", type=str, required=True,
                         help="Development file path to be used")
-    parser.add_argument("--bert-model", type=str, required=True,
+    parser.add_argument("--bert_model", type=str, required=True,
                         help="Bert/XLNet Model to be used")
-    parser.add_argument("--train-batch-size", type=int,
+    parser.add_argument("--train_batch_size", type=int,
                         default=32, help="Size of the training batch")
-    parser.add_argument("--dev-batch-size", type=int,
+    parser.add_argument("--dev_batch_size", type=int,
                         default=64, help="Size of the dev batch")
     parser.add_argument("--n_epochs", type=int,
                         default=3, help="Number of training epochs")
     parser.add_argument("--learning_rate", type=float,
                         default=5e-5, help="Learning rate for fine-tunning BERT")
+    parser.add_argument("--limit_gpus:", type=int, default=-1,
+                        help="Limit number of GPUs to be used. Set to -1 to use all")
     return parser.parse_args(argv)
