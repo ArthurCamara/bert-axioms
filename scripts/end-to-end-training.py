@@ -45,12 +45,7 @@ def run_retrieval_step(data_dir, k, anserini_path, overwrite=False):
 
 
 def main():
-    argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
-            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.1",
-            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.1",
-            "--bert-model", "bert-base-uncased"]
-
-    args = getArgs(argv)
+    args = getArgs(sys.argv[1:])
 
     logging.basicConfig(level=logging.getLevelName(args.log_level))
 
