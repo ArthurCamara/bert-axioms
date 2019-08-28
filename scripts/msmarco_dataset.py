@@ -40,6 +40,7 @@ class MsMarcoDataset(Dataset):
             size = 36127662
         elif tsv_file.endswith("dev-triples.top100"):
             size = 519296
+        print(size)
         if size is None:
             with open(tsv_file) as f:
                 for i, _ in tqdm(enumerate(f), desc="Counting lines on file..."):

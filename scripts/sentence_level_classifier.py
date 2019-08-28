@@ -8,9 +8,10 @@ import logging
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 import multiprocessing
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, recall_score, average_precision_score, accuracy_score
 from args_parser import getArgs
 import os
+import sys
 
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def fine_tune(
         n_epochs=3,
         learning_rate=5e-5,
         n_workers=None,
-        eval_steps=50):
+        eval_steps=10):
     # Set random seeds
     random.seed(seed)
     np.random.seed(seed)
@@ -73,12 +74,6 @@ def fine_tune(
     logging.info("Model loaded")
     if n_workers is None:
         n_workers = multiprocessing.cpu_count() - 2
-    data_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
-    num_train_optimization_steps = len(data_loader) // n_epochs
-
-    optimizer, scheduler = init_optimizer(
-        model, num_train_optimization_steps, learning_rate)
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
@@ -87,6 +82,12 @@ def fine_tune(
         print("Using device IDs {}".format(str(gpu_ids)))
 
     model.to(device)
+    data_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
+    num_train_optimization_steps = len(data_loader) // n_epochs
+    optimizer, scheduler = init_optimizer(
+        model, num_train_optimization_steps, learning_rate)
+
     logger.info("******Started trainning******")
     logger.info("   Num samples = %d", len(train_dataset))
     logger.info("   Num Epochs = %d", n_epochs)
@@ -109,16 +110,16 @@ def fine_tune(
             loss = outputs[0]
             if n_gpu > 1:
                 loss = loss.mean()
-            print(loss)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             tr_loss += loss.item()
-            scheduler.step()
             optimizer.step()
+            scheduler.step()
             model.zero_grad()
             global_step += 1
             if global_step % eval_steps == 0:
+                print("Training loss: {}".format(loss))
                 results = evaluate(dev_dataset,
                                    data_dir,
                                    model,
@@ -151,7 +152,7 @@ def evaluate(eval_dataset: MsMarcoDataset,
              eval_output_dir: str,
              task_name="msmarco",
              prefix="",
-             eval_batchsize=32,
+             eval_batchsize=128,
              n_workers=2):
     results = {}
     eval_dataloader = DataLoader(
@@ -176,19 +177,19 @@ def evaluate(eval_dataset: MsMarcoDataset,
         nb_eval_steps += 1
         if preds is None:
             preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs['next_sentence_label'].detach(
-            ).cpu().numpy()
+            out_label_ids = inputs['next_sentence_label'].detach().cpu().numpy().flatten()
         else:
             batch_predictions = logits.detach().cpu().numpy()
             preds = np.append(preds, batch_predictions, axis=0)
             out_label_ids = np.append(
-                out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy(), axis=0)
+                out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy().flatten(), axis=0)
         eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=1)
     assert len(preds) == len(out_label_ids)
     result = {}
-    result["acc"] = (preds == out_label_ids).sum() / len(preds)
-    result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
+    result["acc"] = accuracy_score(out_label_ids, preds)
+    result["f1"] = f1_score(out_label_ids, preds)
+    result["AP"] = average_precision_score(out_label_ids, preds)
     result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
     results.update(result)
     output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
@@ -202,17 +203,21 @@ def evaluate(eval_dataset: MsMarcoDataset,
 
 
 if __name__ == "__main__":
-    argv = ["--data_dir", "/ssd2/arthur/TREC2019/data",
-            "--train_file", "/ssd2/arthur/insy/msmarco/data/train-triples.sample",
-            "--dev_file", "/ssd2/arthur/insy/msmarco/data/dev-triples.sample",
-            "--bert_model", "bert-base-uncased",
-            "--limit_gpus", "1",
-            "--train_batch_size", "32"]
+    data_dir = "/ssd2/arthur/insy/msmarco/data"
+    if len(sys.argv) > 3:
+        argv = sys.argv[1:]
+    else:
+        argv = [
+            "--data_dir", data_dir,
+            "--train_file", data_dir + "/train-triples.top100",
+            "--dev_file", data_dir + "/dev-triples.top100",
+            "--bert_model", "bert-base-uncased"
+        ]
     args = getArgs(argv)
     # limit_gpus = args.limit_gpus
     train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
     dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
     fine_tune(train_dataset, dev_dataset, args.data_dir,
               limit_gpus=-1,
-              n_workers=0,
+              n_workers=14,
               batch_size=args.train_batch_size)
