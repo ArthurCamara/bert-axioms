@@ -24,7 +24,7 @@ def getArgs(argv=None):
     parser.add_argument("--train_batch_size", type=int,
                         default=32, help="Size of the training batch")
     parser.add_argument("--dev_batch_size", type=int,
-                        default=64, help="Size of the dev batch")
+                        default=128, help="Size of the dev batch")
     parser.add_argument("--n_epochs", type=int,
                         default=3, help="Number of training epochs")
     parser.add_argument("--learning_rate", type=float,
