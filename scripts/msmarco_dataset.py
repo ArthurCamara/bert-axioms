@@ -4,7 +4,8 @@ from torch.utils.data import Dataset, DataLoader
 from pytorch_transformers import BertTokenizer
 from tqdm.auto import tqdm
 import multiprocessing
-multiprocessing.set_start_method('spawn', True)
+import logging
+import pickle
 
 
 class MsMarcoDataset(Dataset):
@@ -30,13 +31,18 @@ class MsMarcoDataset(Dataset):
             XLNet: If you plan on using XLNet insted of BERT, the [CLS] token must be changed.
                 Set this to True if you plan to. (NOT YET IMPLEMENTED)
         """
+        logging.info("Loading dataset from %s", tsv_file)
         self.tsv_path = tsv_file
         self.data_dir = data_dir
         self.transform = transform
         self.max_seq_len = max_seq_len
+        if tsv_file.endswith("train-triples.top100"):
+            size = 36127662
+        elif tsv_file.endswith("dev-triples.top100"):
+            size = 519296
         if size is None:
             with open(tsv_file) as f:
-                for i, _ in enumerate(f):
+                for i, _ in tqdm(enumerate(f), desc="Counting lines on file..."):
                     pass
             self.size = i + 1
         else:
@@ -54,7 +60,15 @@ class MsMarcoDataset(Dataset):
     def load_offset_dict(self):
         offset_dict = {}
         index_dict = {}
+        cache_file = self.tsv_path+".offset"
+        index_file = self.tsv_path+".index"
+        if os.path.isfile(cache_file) and os.path.isfile(index_file):
+            offset_dict = pickle.load(open(cache_file,'rb'))
+            index_dict = pickle.load(open(index_file, 'rb'))
+            return offset_dict, index_dict
+
         with open(self.tsv_path, encoding="utf-8") as f:
+
             pbar = tqdm(total=self.size, desc="Computing offset dictionary")
             location = f.tell()
             line = f.readline()
@@ -68,6 +82,10 @@ class MsMarcoDataset(Dataset):
                 line = f.readline()
                 pbar.update()
                 idx += 1
+        with open(cache_file, 'wb') as f:
+            pickle.dump(offset_dict, f)
+        with open(index_file, 'wb') as f:
+            pickle.dump(index_dict, f)
 
         return offset_dict, index_dict
 

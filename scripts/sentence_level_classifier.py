@@ -82,6 +82,7 @@ def fine_tune(
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
+        gpu_ids.remove(5)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
 
@@ -186,7 +187,7 @@ def evaluate(eval_dataset: MsMarcoDataset,
     preds = np.argmax(preds, axis=1)
     assert len(preds) == len(out_label_ids)
     result = {}
-    result["acc"] = (preds == out_label_ids).mean()
+    result["acc"] = (preds == out_label_ids).sum() / len(preds)
     result["f1"] = f1_score(y_true=out_label_ids, y_pred=preds)
     result["acc_and_f1"] = (result["acc"] + result["f1"]) / 2
     results.update(result)
@@ -207,11 +208,11 @@ if __name__ == "__main__":
             "--bert_model", "bert-base-uncased",
             "--limit_gpus", "1",
             "--train_batch_size", "32"]
-args = getArgs(argv)
-# limit_gpus = args.limit_gpus
-train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
-dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
-fine_tune(train_dataset, dev_dataset, args.data_dir,
-          limit_gpus=-1,
-          n_workers=0,
-          batch_size=args.train_batch_size)
+    args = getArgs(argv)
+    # limit_gpus = args.limit_gpus
+    train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
+    dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
+    fine_tune(train_dataset, dev_dataset, args.data_dir,
+              limit_gpus=-1,
+              n_workers=0,
+              batch_size=args.train_batch_size)
