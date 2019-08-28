@@ -56,6 +56,9 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
         tokenizer = XLNetTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
         if tokenizer is None:
             tokenizer = XLNetTokenizer.from_pretrained(model)
+            if tokenizer is None:
+                print("FUUUUCK")
+                sys.exit(0)
     else:
         tokenizer = BertTokenizer.from_pretrained(
             os.path.join(args.data_home, "models"))
@@ -100,8 +103,9 @@ if __name__ == "__main__":
         argv = [
             "--split", "train",
             "--run_file", "tiny-top100",
-            "--XLNet",
-            "--single_thread"]
+            "--XLNet"
+        ]
+
         args = parser.parse_args(argv)
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
