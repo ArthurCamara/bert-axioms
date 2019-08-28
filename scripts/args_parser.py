@@ -19,7 +19,8 @@ def getArgs(argv=None):
                         help="Train file path to be used")
     parser.add_argument("--dev_file", type=str, required=True,
                         help="Development file path to be used")
-    parser.add_argument("--bert_model", type=str, required=True,
+    parser.add_argument("--bert_model", type=str,
+                        default="bert-base-uncased",
                         help="Bert/XLNet Model to be used")
     parser.add_argument("--train_batch_size", type=int,
                         default=32, help="Size of the training batch")
