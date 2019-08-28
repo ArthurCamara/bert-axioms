@@ -93,8 +93,6 @@ if __name__ == "__main__":
     parser.add_argument("--XLNet", action="store_true")
 
     args = parser.parse_args()
-    if args.XLNet:
-        args.split = args.split + "-XLNet"
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
 
@@ -185,6 +183,8 @@ if __name__ == "__main__":
 
             counter += 1
     pbar = tqdm(total=cpus)
+    if args.XLNet:
+        args.split = args.split + "-XLNet"
 
     def update(*a):
         pbar.update()
