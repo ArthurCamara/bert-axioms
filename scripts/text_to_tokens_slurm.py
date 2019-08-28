@@ -7,7 +7,7 @@ import argparse
 import gzip
 import subprocess
 from tqdm.auto import tqdm
-from pytorch_transformers import BertTokenizer
+from pytorch_transformers import BertTokenizer, XLNetTokenizer
 
 
 def getcontent(docid, file_name):
@@ -34,11 +34,14 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length=509):
             tokens_b.pop()
 
 
-def text_to_tokens(query, document, tokenizer):
+def text_to_tokens(query, document, tokenizer, xlnet=False):
     tokens_a = tokenizer.tokenize(query)
     tokens_b = tokenizer.tokenize(document)
     _truncate_seq_pair(tokens_a, tokens_b)
-    tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
+    if xlnet:
+        tokens = tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"] + ["[CLS]"]
+    else:
+        tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
     return tokens
 
 
@@ -49,8 +52,11 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args):
         f.seek(block_offset[chunk_no])
         for i in range(no_lines):
             lines.append(f.readline().strip())
-    tokenizer = BertTokenizer.from_pretrained(
-        os.path.join(args.data_home, "models"))
+    if args.XLNet:
+        tokenizer = XLNetTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
+    else:
+        tokenizer = BertTokenizer.from_pretrained(
+            os.path.join(args.data_home, "models"))
     output_line_format = "{}-{}\t{}\t{}\n"
     with open("{}/{}-triples.{}".format(args.data_home, args.split, chunk_no), 'w', encoding='utf-8') as outf:
         if current.name == "MainProcess":
@@ -68,7 +74,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args):
                 is_relevant = doc_id in qrel[topic_id]
                 query = querystring[topic_id]
                 document = getcontent(doc_id, docs_file)
-                tokenized = text_to_tokens(query, document, tokenizer)
+                tokenized = text_to_tokens(query, document, tokenizer, args.XLNet)
                 outf.write(output_line_format.format(
                     topic_id, doc_id, tokenized, int(is_relevant)))
                 progress_bar.update(1)
@@ -83,7 +89,8 @@ if __name__ == "__main__":
                         default="/ssd2/arthur/TREC2019/data/")
     parser.add_argument("--run_file", type=str,
                         default="tiny-top100"),
-    parser.add_argument("--single_thread", action="store_true")
+    parser.add_argument("--single_thread", action="store_true"),
+    parser.add_argument("--XLNet", action="store_true")
 
     args = parser.parse_args()
 

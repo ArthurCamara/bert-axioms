@@ -8,11 +8,11 @@ import logging
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 import multiprocessing
-from sklearn.metrics import f1_score, recall_score, average_precision_score, accuracy_score
+from sklearn.metrics import f1_score, average_precision_score, accuracy_score
 from args_parser import getArgs
 import os
 import sys
-
+multiprocessing.set_start_method('spawn', True)
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,10 @@ def fine_tune(
         n_epochs=3,
         learning_rate=5e-5,
         n_workers=None,
-        eval_steps=10):
+        eval_steps=50,
+        gradient_accumulation_steps=1,
+        per_gpu_train_batch_size=8,
+        ignore_gpus=[]):
     # Set random seeds
     random.seed(seed)
     np.random.seed(seed)
@@ -77,27 +80,40 @@ def fine_tune(
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
+        for _id in ignore_gpus:
+            if _id in gpu_ids:
+                gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
-
-    model.to(device)
+    batch_size = per_gpu_train_batch_size * max(1, len(gpu_ids))
+    if n_gpu > 0:
+        device_0 = torch.device("cuda:{}" .format(gpu_ids[0]))
+        model.to(device_0)
+    else:
+        model.to(device)
     data_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
-    num_train_optimization_steps = len(data_loader) // n_epochs
+    num_train_optimization_steps = len(
+        data_loader) // gradient_accumulation_steps * n_epochs
     optimizer, scheduler = init_optimizer(
         model, num_train_optimization_steps, learning_rate)
 
     logger.info("******Started trainning******")
     logger.info("   Num samples = %d", len(train_dataset))
     logger.info("   Num Epochs = %d", n_epochs)
-    logger.info("   Batch size = %d", batch_size)
+    logger.info("  Instantaneous batch size per GPU = %d",
+                per_gpu_train_batch_size)
+    logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
+                batch_size * gradient_accumulation_steps)
+    logger.info("  Gradient Accumulation steps = %d",
+                gradient_accumulation_steps)
     logger.info("   Total optmization steps %d", num_train_optimization_steps)
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     for _ in tqdm(range(n_epochs), desc="Epochs"):
-        for batch in tqdm(data_loader, desc="Batches"):
+        for step, batch in tqdm(enumerate(data_loader), desc="Batches"):
             model.train()
             batch = tuple(t.to(device) for t in batch)
             inputs = {'input_ids': batch[0],
@@ -109,25 +125,26 @@ def fine_tune(
             loss = outputs[0]
             if n_gpu > 1:
                 loss = loss.mean()
-            loss.backward()
+            if gradient_accumulation_steps > 1:
+                loss = loss / gradient_accumulation_steps
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            loss.backward()
 
             tr_loss += loss.item()
-            optimizer.step()
-            scheduler.step()
-            model.zero_grad()
+            if (step + 1) % gradient_accumulation_steps == 0:
+                optimizer.step()
+                scheduler.step()
+                model.zero_grad()
             global_step += 1
             if global_step % eval_steps == 0:
-                print("Training loss: {}".format(loss))
-                results = evaluate(dev_dataset,
-                                   data_dir,
-                                   model,
-                                   device,
-                                   data_dir,
-                                   eval_batchsize=eval_batch_size,
-                                   n_workers=n_workers)
-                for key, value in results.items():
-                    print('\teval_{}:\t{}'.format(key, value))
+                print("Training loss: {}".format(tr_loss))
+                _ = evaluate(dev_dataset,
+                             data_dir,
+                             model,
+                             device,
+                             data_dir,
+                             eval_batchsize=eval_batch_size,
+                             n_workers=n_workers)
                 print("\tlr: \t{}".format(scheduler.get_lr()[0]))
                 print("\tLoss:\t{}".format(tr_loss - logging_loss / eval_steps))
                 logging_loss = tr_loss
@@ -176,7 +193,8 @@ def evaluate(eval_dataset: MsMarcoDataset,
         nb_eval_steps += 1
         if preds is None:
             preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs['next_sentence_label'].detach().cpu().numpy().flatten()
+            out_label_ids = inputs['next_sentence_label'].detach(
+            ).cpu().numpy().flatten()
         else:
             batch_predictions = logits.detach().cpu().numpy()
             preds = np.append(preds, batch_predictions, axis=0)
@@ -202,21 +220,29 @@ def evaluate(eval_dataset: MsMarcoDataset,
 
 
 if __name__ == "__main__":
-    data_dir = "/ssd2/arthur/insy/msmarco/data"
+    data_dir = "/ssd2/arthur/TREC2019/data"
     if len(sys.argv) > 3:
         argv = sys.argv[1:]
     else:
         argv = [
             "--data_dir", data_dir,
-            "--train_file", data_dir + "/train-triples.top100",
-            "--dev_file", data_dir + "/dev-triples.top100",
-            "--bert_model", "bert-base-uncased"
+            "--train_file", data_dir + "/train-triples.0",
+            "--dev_file", data_dir + "/dev-triples.0",
+            "--bert_model", "bert-base-uncased",
+            "--per_gpu_train_batch_size", "8",
+            "--train_batch_size", "32",
+            "--gradient_accumulation_steps", "10",
+            "--ignore_gpu_ids", "0,1,5,7"
         ]
     args = getArgs(argv)
+    logging.basicConfig(level=logging.getLevelName(args.log_level))
     # limit_gpus = args.limit_gpus
     train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
     dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
     fine_tune(train_dataset, dev_dataset, args.data_dir,
               limit_gpus=-1,
               n_workers=14,
-              batch_size=args.train_batch_size)
+              batch_size=args.train_batch_size,
+              per_gpu_train_batch_size=args.per_gpu_train_batch_size,
+              gradient_accumulation_steps=args.gradient_accumulation_steps,
+              ignore_gpus=args.ignore_gpu_ids)
