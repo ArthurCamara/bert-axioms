@@ -45,7 +45,7 @@ def text_to_tokens(query, document, tokenizer, xlnet=False):
     return tokens
 
 
-def process_chunk(chunk_no, block_offset, inf, no_lines, args):
+def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
     current = current_process()
     lines = []
     with open(inf, 'r') as f:
@@ -54,9 +54,13 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args):
             lines.append(f.readline().strip())
     if args.XLNet:
         tokenizer = XLNetTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
+        if tokenizer is None:
+            tokenizer = XLNetTokenizer.from_pretrained(model)
     else:
         tokenizer = BertTokenizer.from_pretrained(
             os.path.join(args.data_home, "models"))
+        if tokenizer is None:
+            tokenizer = BertTokenizer.from_pretrained(model)
     output_line_format = "{}-{}\t{}\t{}\n"
     with open("{}/{}-triples.{}".format(args.data_home, args.split, chunk_no), 'w', encoding='utf-8') as outf:
         if current.name == "MainProcess":
@@ -87,12 +91,18 @@ if __name__ == "__main__":
     parser.add_argument("--top_k", type=int, default=100)
     parser.add_argument("--data_home", type=str,
                         default="/ssd2/arthur/TREC2019/data/")
-    parser.add_argument("--run_file", type=str,
-                        default="tiny-top100"),
+    parser.add_argument("--run_file", type=str, required=True),
     parser.add_argument("--single_thread", action="store_true"),
     parser.add_argument("--XLNet", action="store_true")
-
-    args = parser.parse_args()
+    if len(sys.argv) > 3:
+        args = parser.parse_args(sys.argv[1:])
+    else:
+        argv = [
+            "--split", "train",
+            "--run_file", "tiny-top100",
+            "--XLNet",
+            "--single_thread"]
+        args = parser.parse_args(argv)
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
 
@@ -184,19 +194,22 @@ if __name__ == "__main__":
             counter += 1
     pbar = tqdm(total=cpus)
     if args.XLNet:
+        model = "xlnet-base-cased"
         args.split = args.split + "-XLNet"
+    else:
+        model = "bert-base-uncased"
 
     def update(*a):
         pbar.update()
     if args.single_thread:
-        process_chunk(0, block_offset, run_file, lines_per_chunk, args)
+        process_chunk(0, block_offset, run_file, lines_per_chunk, args, model)
         sys.exit(0)
     pool = mp.Pool(cpus)
     jobs = []
 
     for i in tqdm(range(len(block_offset))):
         jobs.append(pool.apply_async(process_chunk, args=(
-            i, block_offset, run_file, lines_per_chunk, args), callback=update))
+            i, block_offset, run_file, lines_per_chunk, args, model), callback=update))
     for job in jobs:
         job.get()
     pool.close()
