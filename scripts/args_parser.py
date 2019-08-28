@@ -35,4 +35,8 @@ def getArgs(argv=None):
                         default=8)
     parser.add_argument("--gradient_accumulation_steps", type=int,
                         default=0)
-    return parser.parse_args(argv)
+    parser.add_argument("--ignore_gpu_ids", type=str)
+    args = parser.parse_args(argv)
+    if args.ignore_gpu_ids:
+        args.ignore_gpu_ids = list(map(int, args.ignore_gpu_ids.split(",")))
+    return args
