@@ -3,6 +3,7 @@
 import logging
 import subprocess
 import os
+import sys
 from msmarco_dataset import MsMarcoDataset
 from trecrun_to_bert import TRECrun_to_BERT
 from args_parser import getArgs
@@ -47,12 +48,15 @@ def run_retrieval_step(data_dir, k, anserini_path, overwrite=False):
 def main():
     # args = getArgs(sys.argv[1:])
     data_dir = "/ssd2/arthur/insy/msmarco/data"
-    argv = [
-        "--data_dir", data_dir,
-        "--train_file", data_dir + "/train-triples.0",
-        "--dev_file", data_dir + "/dev-triples.0",
-        "--bert_model", "bert-base-uncased"
-    ]
+    if len(sys.argv) < 3:
+        argv = [
+            "--data_dir", data_dir,
+            "--train_file", data_dir + "/train-triples.0",
+            "--dev_file", data_dir + "/dev-triples.0",
+            "--bert_model", "bert-base-uncased"
+        ]
+    else:
+        argv = sys.argv[1:]
     args = getArgs(argv)
     logging.basicConfig(level=logging.getLevelName(args.log_level))
 
