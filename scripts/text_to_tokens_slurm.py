@@ -9,6 +9,7 @@ import subprocess
 import logging
 from tqdm.auto import tqdm
 from pytorch_transformers import BertTokenizer, XLNetTokenizer
+mp.set_start_method('spawn', True)
 
 
 def getcontent(docid, file_name):
@@ -58,9 +59,6 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
         if tokenizer is None:
             logging.info("Loading model from %s", model)
             tokenizer = XLNetTokenizer.from_pretrained(model)
-            if tokenizer is None:
-                print("FUUUUCK")
-                sys.exit(0)
     else:
         tokenizer = BertTokenizer.from_pretrained(
             os.path.join(args.data_home, "models"))
@@ -105,10 +103,9 @@ if __name__ == "__main__":
     else:
         argv = [
             "--split", "train",
-            "--run_file", "tiny-top100",
+            "--run_file", "msmarco-doctrain-top100",
             "--XLNet"
-        ]
-
+            ]
         args = parser.parse_args(argv)
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
@@ -188,8 +185,8 @@ if __name__ == "__main__":
     print("{}  lines per chunk".format(lines_per_chunk))
     excess_lines = number_of_lines_to_process % cpus
     start = 0
-    if cpus <2:
-        block_offset [0]=[0]
+    if cpus < 2:
+        block_offset[0] =0
     else:
         with open(run_file) as f:
             current_chunk = 0
