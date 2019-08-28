@@ -51,7 +51,7 @@ def fine_tune(
         n_epochs=3,
         learning_rate=5e-5,
         n_workers=None,
-        eval_steps=50,
+        eval_steps=200,
         gradient_accumulation_steps=1,
         per_gpu_train_batch_size=8,
         ignore_gpus=[]):
