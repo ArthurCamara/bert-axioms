@@ -184,17 +184,20 @@ if __name__ == "__main__":
     print("{}  lines per chunk".format(lines_per_chunk))
     excess_lines = number_of_lines_to_process % cpus
     start = 0
-    with open(run_file) as f:
-        current_chunk = 0
-        counter = 0
-        line = True
-        while(line):
-            if (counter) % lines_per_chunk == 0:
-                block_offset[current_chunk] = f.tell()
-                current_chunk += 1
-            line = f.readline()
+    if cpus <2:
+        block_offset [0]=[0]
+    else:
+        with open(run_file) as f:
+            current_chunk = 0
+            counter = 0
+            line = True
+            while(line):
+                if (counter) % lines_per_chunk == 0:
+                    block_offset[current_chunk] = f.tell()
+                    current_chunk += 1
+                line = f.readline()
 
-            counter += 1
+                counter += 1
     pbar = tqdm(total=cpus)
     if args.XLNet:
         model = "xlnet-base-cased"
