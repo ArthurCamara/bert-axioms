@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pytorch_transformers import BertTokenizer
 from tqdm.auto import tqdm
-import multiprocessing
 import logging
 import pickle
 
@@ -61,10 +60,10 @@ class MsMarcoDataset(Dataset):
     def load_offset_dict(self):
         offset_dict = {}
         index_dict = {}
-        cache_file = self.tsv_path+".offset"
-        index_file = self.tsv_path+".index"
+        cache_file = self.tsv_path + ".offset"
+        index_file = self.tsv_path + ".index"
         if os.path.isfile(cache_file) and os.path.isfile(index_file):
-            offset_dict = pickle.load(open(cache_file,'rb'))
+            offset_dict = pickle.load(open(cache_file, 'rb'))
             index_dict = pickle.load(open(index_file, 'rb'))
             return offset_dict, index_dict
 

@@ -31,4 +31,8 @@ def getArgs(argv=None):
                         default=5e-5, help="Learning rate for fine-tunning BERT")
     parser.add_argument("--limit_gpus:", type=int, default=-1,
                         help="Limit number of GPUs to be used. Set to -1 to use all")
+    parser.add_argument("--per_gpu_train_batch_size", type=int,
+                        default=8)
+    parser.add_argument("--gradient_accumulation_steps", type=int,
+                        default=0)
     return parser.parse_args(argv)
