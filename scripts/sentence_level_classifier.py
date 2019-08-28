@@ -77,7 +77,6 @@ def fine_tune(
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
-        gpu_ids.remove(5)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
 
