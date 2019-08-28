@@ -53,7 +53,8 @@ def fine_tune(
         n_workers=None,
         eval_steps=50,
         gradient_accumulation_steps=1,
-        per_gpu_train_batch_size=8):
+        per_gpu_train_batch_size=8,
+        ignore_gpus=[]):
     # Set random seeds
     random.seed(seed)
     np.random.seed(seed)
@@ -79,9 +80,9 @@ def fine_tune(
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
-        gpu_ids.remove(5)
-        gpu_ids.remove(0)
-        gpu_ids.remove(1)
+        for _id in ignore_gpus:
+            if _id in gpu_ids:
+                gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
     batch_size = per_gpu_train_batch_size * max(1, len(gpu_ids))
@@ -104,7 +105,8 @@ def fine_tune(
                 per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
                 batch_size * gradient_accumulation_steps)
-    logger.info("  Gradient Accumulation steps = %d", gradient_accumulation_steps)
+    logger.info("  Gradient Accumulation steps = %d",
+                gradient_accumulation_steps)
     logger.info("   Total optmization steps %d", num_train_optimization_steps)
 
     global_step = 0
@@ -125,26 +127,24 @@ def fine_tune(
                 loss = loss.mean()
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
-            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            loss.backward()
 
             tr_loss += loss.item()
             if (step + 1) % gradient_accumulation_steps == 0:
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
-                global_step += 1
+            global_step += 1
             if global_step % eval_steps == 0:
-                print("Training loss: {}".format(loss))
-                results = evaluate(dev_dataset,
-                                   data_dir,
-                                   model,
-                                   device,
-                                   data_dir,
-                                   eval_batchsize=eval_batch_size,
-                                   n_workers=n_workers)
-                for key, value in results.items():
-                    print('\teval_{}:\t{}'.format(key, value))
+                print("Training loss: {}".format(tr_loss))
+                _ = evaluate(dev_dataset,
+                             data_dir,
+                             model,
+                             device,
+                             data_dir,
+                             eval_batchsize=eval_batch_size,
+                             n_workers=n_workers)
                 print("\tlr: \t{}".format(scheduler.get_lr()[0]))
                 print("\tLoss:\t{}".format(tr_loss - logging_loss / eval_steps))
                 logging_loss = tr_loss
@@ -220,7 +220,7 @@ def evaluate(eval_dataset: MsMarcoDataset,
 
 
 if __name__ == "__main__":
-    data_dir = "/ssd2/arthur/insy/msmarco/data"
+    data_dir = "/ssd2/arthur/TREC2019/data"
     if len(sys.argv) > 3:
         argv = sys.argv[1:]
     else:
@@ -229,11 +229,13 @@ if __name__ == "__main__":
             "--train_file", data_dir + "/train-triples.0",
             "--dev_file", data_dir + "/dev-triples.0",
             "--bert_model", "bert-base-uncased",
-            "--per_gpu_train_batch_size", "10",
-            "--train_batch_size", "64",
-            "--gradient_accumulation_steps", "4"
+            "--per_gpu_train_batch_size", "8",
+            "--train_batch_size", "32",
+            "--gradient_accumulation_steps", "10",
+            "--ignore_gpu_ids", "0,1,5,7"
         ]
     args = getArgs(argv)
+    logging.basicConfig(level=logging.getLevelName(args.log_level))
     # limit_gpus = args.limit_gpus
     train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
     dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
@@ -242,4 +244,5 @@ if __name__ == "__main__":
               n_workers=14,
               batch_size=args.train_batch_size,
               per_gpu_train_batch_size=args.per_gpu_train_batch_size,
-              gradient_accumulation_steps=args.gradient_accumulation_steps)
+              gradient_accumulation_steps=args.gradient_accumulation_steps,
+              ignore_gpus=args.ignore_gpu_ids)
