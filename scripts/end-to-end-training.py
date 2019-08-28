@@ -3,7 +3,6 @@
 import logging
 import subprocess
 import os
-import sys
 from msmarco_dataset import MsMarcoDataset
 from trecrun_to_bert import TRECrun_to_BERT
 from args_parser import getArgs
