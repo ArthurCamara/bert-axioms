@@ -6,6 +6,7 @@ import csv
 import argparse
 import gzip
 import subprocess
+import logging
 from tqdm.auto import tqdm
 from pytorch_transformers import BertTokenizer, XLNetTokenizer
 
@@ -55,6 +56,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
     if args.XLNet:
         tokenizer = XLNetTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
         if tokenizer is None:
+            logging.info("Loading model from %s", model)
             tokenizer = XLNetTokenizer.from_pretrained(model)
     else:
         tokenizer = BertTokenizer.from_pretrained(
@@ -94,6 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--run_file", type=str, required=True),
     parser.add_argument("--single_thread", action="store_true"),
     parser.add_argument("--XLNet", action="store_true")
+    logging.basicConfig(level=logging.getLevelName("INFO"))
     if len(sys.argv) > 3:
         args = parser.parse_args(sys.argv[1:])
     else:
