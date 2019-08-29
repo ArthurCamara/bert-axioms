@@ -55,7 +55,8 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
         for i in range(no_lines):
             lines.append(f.readline().strip())
     if args.XLNet:
-        tokenizer = XLNetTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
+        tokenizer = XLNetTokenizer.from_pretrained(
+            os.path.join(args.data_home, "models"))
         if tokenizer is None:
             logging.info("Loading model from %s", model)
             tokenizer = XLNetTokenizer.from_pretrained(model)
@@ -70,21 +71,17 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
             position = 1
         else:
             position = current._identity[0]
-        with tqdm(total=len(lines), position=position) as progress_bar:
-            for counter, line in tqdm(enumerate(lines),
-                                      desc="running for {}".format(str(chunk_no).zfill(2)),
-                                      position=position):
-                try:
-                    [topic_id, _, doc_id, ranking, score, _] = line.split()
-                except:
-                    continue
-                is_relevant = doc_id in qrel[topic_id]
-                query = querystring[topic_id]
-                document = getcontent(doc_id, docs_file)
-                tokenized = text_to_tokens(query, document, tokenizer, args.XLNet)
-                outf.write(output_line_format.format(
-                    topic_id, doc_id, tokenized, int(is_relevant)))
-                progress_bar.update(1)
+        for counter, line in tqdm(enumerate(lines), desc="running for {}".format(str(chunk_no).zfill(2)), position=position):
+            try:
+                [topic_id, _, doc_id, ranking, score, _] = line.split()
+            except:
+                continue
+            is_relevant = doc_id in qrel[topic_id]
+            query = querystring[topic_id]
+            document = getcontent(doc_id, docs_file)
+            tokenized = text_to_tokens(query, document, tokenizer, args.XLNet)
+            outf.write(output_line_format.format(
+                topic_id, doc_id, tokenized, int(is_relevant)))
 
 
 if __name__ == "__main__":
@@ -105,7 +102,7 @@ if __name__ == "__main__":
             "--split", "train",
             "--run_file", "msmarco-doctrain-top100",
             "--XLNet"
-            ]
+        ]
         args = parser.parse_args(argv)
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
@@ -186,7 +183,7 @@ if __name__ == "__main__":
     excess_lines = number_of_lines_to_process % cpus
     start = 0
     if cpus < 2:
-        block_offset[0] =0
+        block_offset[0] = 0
     else:
         with open(run_file) as f:
             current_chunk = 0
