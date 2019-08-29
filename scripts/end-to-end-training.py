@@ -47,16 +47,21 @@ def run_retrieval_step(data_dir, k, anserini_path, overwrite=False):
 
 def main():
     # args = getArgs(sys.argv[1:])
-    data_dir = "/ssd2/arthur/insy/msmarco/data"
-    if len(sys.argv) < 3:
+    data_dir = "/ssd2/arthur/TREC2019/data"
+    if len(sys.argv) > 3:
+        argv = sys.argv[1:]
+    else:
         argv = [
             "--data_dir", data_dir,
             "--train_file", data_dir + "/train-triples.0",
             "--dev_file", data_dir + "/dev-triples.0",
-            "--bert_model", "bert-base-uncased"
+            "--per_gpu_train_batch_size", "8",
+            "--train_batch_size", "32",
+            "--gradient_accumulation_steps", "10",
+            "--ignore_gpu_ids", "0,1,5,7",
+            "--limit_gpus", "-1",
+            "--eval_steps", "10"
         ]
-    else:
-        argv = sys.argv[1:]
     args = getArgs(argv)
     logging.basicConfig(level=logging.getLevelName(args.log_level))
 
@@ -69,7 +74,7 @@ def main():
     dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
 
     # Fine tune
-    fine_tune(train_dataset, dev_dataset, args.data_dir, n_workers=0)
+    fine_tune(train_dataset, dev_dataset, args)
 
 
 if __name__ == "__main__":
