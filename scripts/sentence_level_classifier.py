@@ -42,77 +42,69 @@ def init_optimizer(
 def fine_tune(
         train_dataset: MsMarcoDataset,
         dev_dataset: MsMarcoDataset,
-        data_dir,
-        seed: int = 42,
-        limit_gpus: int = -1,
-        bert_model="bert-base-uncased",
-        batch_size=32,
-        eval_batch_size=128,
-        n_epochs=3,
-        learning_rate=5e-5,
-        n_workers=None,
-        eval_steps=200,
-        gradient_accumulation_steps=1,
-        per_gpu_train_batch_size=8,
-        ignore_gpus=[]):
+        args):
     # Set random seeds
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
     # Set CUDA
     n_gpu = 0
     if torch.cuda.is_available():
         logging.info("Using CUDA")
-        torch.cuda.manual_seed_all(seed)
-        if limit_gpus < 0:
-            limit_gpus = torch.cuda.device_count()
-        if limit_gpus > -1:
-            n_gpu = min(torch.cuda.device_count(), limit_gpus)
+        torch.cuda.manual_seed_all(args.seed)
+        # We DO NOT want to limit the number of GPUs to be used
+        if args.limit_gpus < 0:
+            args.limit_gpus = torch.cuda.device_count()
+            n_gpu = torch.cuda.device_count()
+        # We WANT to limit the number of GPUs to be used
+        else:
+            n_gpu = min(torch.cuda.device_count(), args.limit_gpus)
 
     device = torch.device("cuda" if (torch.cuda.is_available()
-                                     and n_gpu > 0 and limit_gpus != 1) else "cpu")
+                                     and n_gpu > 0 and args.limit_gpus != 1) else "cpu")
     logging.info("Using device {}".format(device))
-    model = BertForNextSentencePrediction.from_pretrained(bert_model)
+    model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     logging.info("Model loaded")
-    if n_workers is None:
-        n_workers = multiprocessing.cpu_count() - 2
+    if args.n_workers is None:
+        args.n_workers = multiprocessing.cpu_count() - 2
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
-        for _id in ignore_gpus:
+        # Ignore any GPU? (usefull if there is more users on current machine, already using a GPU)
+        for _id in args.ignore_gpu_ids:
             if _id in gpu_ids:
                 gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
-    batch_size = per_gpu_train_batch_size * max(1, len(gpu_ids))
+        args.train_batch_size = args.per_gpu_train_batch_size * max(1, len(gpu_ids))
     if n_gpu > 0:
         device_0 = torch.device("cuda:{}" .format(gpu_ids[0]))
         model.to(device_0)
     else:
         model.to(device)
     data_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=n_workers)
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.n_workers)
     num_train_optimization_steps = len(
-        data_loader) // gradient_accumulation_steps * n_epochs
+        data_loader) // args.gradient_accumulation_steps * args.n_epochs
     optimizer, scheduler = init_optimizer(
-        model, num_train_optimization_steps, learning_rate)
+        model, num_train_optimization_steps, args.learning_rate)
 
     logger.info("******Started trainning******")
     logger.info("   Num samples = %d", len(train_dataset))
-    logger.info("   Num Epochs = %d", n_epochs)
+    logger.info("   Num Epochs = %d", args.n_epochs)
     logger.info("  Instantaneous batch size per GPU = %d",
-                per_gpu_train_batch_size)
+                args.per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
-                batch_size * gradient_accumulation_steps)
+                args.train_batch_size * args.gradient_accumulation_steps)
     logger.info("  Gradient Accumulation steps = %d",
-                gradient_accumulation_steps)
+                args.gradient_accumulation_steps)
     logger.info("   Total optmization steps %d", num_train_optimization_steps)
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
-    for _ in tqdm(range(n_epochs), desc="Epochs"):
+    for _ in tqdm(range(args.n_epochs), desc="Epochs"):
         for step, batch in tqdm(enumerate(data_loader), desc="Batches"):
             model.train()
             batch = tuple(t.to(device) for t in batch)
@@ -125,32 +117,33 @@ def fine_tune(
             loss = outputs[0]
             if n_gpu > 1:
                 loss = loss.mean()
-            if gradient_accumulation_steps > 1:
-                loss = loss / gradient_accumulation_steps
+            if args.gradient_accumulation_steps > 1:
+                loss = loss / args.gradient_accumulation_steps
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             loss.backward()
 
             tr_loss += loss.item()
-            if (step + 1) % gradient_accumulation_steps == 0:
+            if (step + 1) % args.gradient_accumulation_steps == 0:
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
             global_step += 1
-            if global_step % eval_steps == 0:
+            if global_step % args.eval_steps == 0:
                 print("Training loss: {}".format(tr_loss))
                 _ = evaluate(dev_dataset,
-                             data_dir,
+                             args.data_dir,
                              model,
                              device,
-                             data_dir,
-                             eval_batchsize=eval_batch_size,
-                             n_workers=n_workers)
+                             args.data_dir,
+                             eval_batchsize=args.eval_batch_size,
+                             n_workers=args.n_workers)
                 print("\tlr: \t{}".format(scheduler.get_lr()[0]))
-                print("\tLoss:\t{}".format(tr_loss - logging_loss / eval_steps))
+                print("\tLoss:\t{}".format(
+                    tr_loss - logging_loss / args.eval_steps))
                 logging_loss = tr_loss
                 # Save model
                 output_dir = os.path.join(
-                    data_dir, "checkpoint-{}".format(global_step))
+                    args.data_dir, "checkpoint-{}".format(global_step))
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
                 model_to_save = model.module if hasattr(
@@ -228,21 +221,15 @@ if __name__ == "__main__":
             "--data_dir", data_dir,
             "--train_file", data_dir + "/train-triples.0",
             "--dev_file", data_dir + "/dev-triples.0",
-            "--bert_model", "bert-base-uncased",
             "--per_gpu_train_batch_size", "8",
             "--train_batch_size", "32",
             "--gradient_accumulation_steps", "10",
-            "--ignore_gpu_ids", "0,1,5,7"
+            "--ignore_gpu_ids", "0,1,5,7",
+            "--limit_gpus", "-1",
+            "--eval_steps", "10"
         ]
     args = getArgs(argv)
     logging.basicConfig(level=logging.getLevelName(args.log_level))
-    # limit_gpus = args.limit_gpus
     train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
     dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
-    fine_tune(train_dataset, dev_dataset, args.data_dir,
-              limit_gpus=-1,
-              n_workers=14,
-              batch_size=args.train_batch_size,
-              per_gpu_train_batch_size=args.per_gpu_train_batch_size,
-              gradient_accumulation_steps=args.gradient_accumulation_steps,
-              ignore_gpus=args.ignore_gpu_ids)
+    fine_tune(train_dataset, dev_dataset, args)
