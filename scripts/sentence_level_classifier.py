@@ -53,9 +53,11 @@ def fine_tune(
     if torch.cuda.is_available():
         logging.info("Using CUDA")
         torch.cuda.manual_seed_all(args.seed)
+        # We DO NOT want to limit the number of GPUs to be used
         if args.limit_gpus < 0:
             args.limit_gpus = torch.cuda.device_count()
             n_gpu = torch.cuda.device_count()
+        # We WANT to limit the number of GPUs to be used
         else:
             n_gpu = min(torch.cuda.device_count(), args.limit_gpus)
 
@@ -69,7 +71,8 @@ def fine_tune(
 
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
-        for _id in args.ignore_gpus:
+        # Ignore any GPU? (usefull if there is more users on current machine, already using a GPU)
+        for _id in args.ignore_gpu_ids:
             if _id in gpu_ids:
                 gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
