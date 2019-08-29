@@ -104,7 +104,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_threads", type=int, default=-1)
     # logging.basicConfig(level=logging.getLevelName("INFO"))
     if len(sys.argv) > 3:
-        args = parser.parse_args(sys.argv[1:])
+        argv = sys.argv[1:]
     else:
         argv = [
             "--split", "train",
