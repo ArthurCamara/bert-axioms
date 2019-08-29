@@ -55,7 +55,8 @@ def fine_tune(
         torch.cuda.manual_seed_all(args.seed)
         if args.limit_gpus < 0:
             args.limit_gpus = torch.cuda.device_count()
-        elif args.limit_gpus > -1:
+            n_gpu = torch.cuda.device_count()
+        else:
             n_gpu = min(torch.cuda.device_count(), args.limit_gpus)
 
     device = torch.device("cuda" if (torch.cuda.is_available()
@@ -73,14 +74,14 @@ def fine_tune(
                 gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
-    args.batch_size = args.per_gpu_train_batch_size * max(1, len(gpu_ids))
+        args.train_batch_size = args.per_gpu_train_batch_size * max(1, len(gpu_ids))
     if n_gpu > 0:
         device_0 = torch.device("cuda:{}" .format(gpu_ids[0]))
         model.to(device_0)
     else:
         model.to(device)
     data_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.n_workers)
     num_train_optimization_steps = len(
         data_loader) // args.gradient_accumulation_steps * args.n_epochs
     optimizer, scheduler = init_optimizer(
@@ -92,7 +93,7 @@ def fine_tune(
     logger.info("  Instantaneous batch size per GPU = %d",
                 args.per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
-                args.batch_size * args.gradient_accumulation_steps)
+                args.train_batch_size * args.gradient_accumulation_steps)
     logger.info("  Gradient Accumulation steps = %d",
                 args.gradient_accumulation_steps)
     logger.info("   Total optmization steps %d", num_train_optimization_steps)
@@ -222,7 +223,7 @@ if __name__ == "__main__":
             "--gradient_accumulation_steps", "10",
             "--ignore_gpu_ids", "0,1,5,7",
             "--limit_gpus", "-1",
-            "--n_workers", "14"
+            "--eval_steps", "10"
         ]
     args = getArgs(argv)
     logging.basicConfig(level=logging.getLevelName(args.log_level))
