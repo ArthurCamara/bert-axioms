@@ -24,7 +24,7 @@ def getArgs(argv=None):
                         help="Bert/XLNet Model to be used")
     parser.add_argument("--train_batch_size", type=int,
                         default=32, help="Size of the training batch")
-    parser.add_argument("--dev_batch_size", type=int,
+    parser.add_argument("--eval_batch_size", type=int,
                         default=128, help="Size of the dev batch")
     parser.add_argument("--n_epochs", type=int,
                         default=3, help="Number of training epochs")
@@ -35,8 +35,13 @@ def getArgs(argv=None):
     parser.add_argument("--per_gpu_train_batch_size", type=int,
                         default=8)
     parser.add_argument("--gradient_accumulation_steps", type=int,
-                        default=0)
+                        default=1)
     parser.add_argument("--ignore_gpu_ids", type=str)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--n_workers", type=int,
+                        help="Number of workers for the dataset loader")
+    parser.add_argument("--eval_steps", type=int, default=200,
+                        help="How many iterations to run before running on the Eval dataset")
     args = parser.parse_args(argv)
     if args.ignore_gpu_ids:
         args.ignore_gpu_ids = list(map(int, args.ignore_gpu_ids.split(",")))
