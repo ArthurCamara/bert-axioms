@@ -1,5 +1,6 @@
 import multiprocessing as mp
 from multiprocessing import current_process
+
 import os
 import sys
 import csv
@@ -55,23 +56,28 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
         for i in range(no_lines):
             lines.append(f.readline().strip())
     if args.XLNet:
-        tokenizer = XLNetTokenizer.from_pretrained(
-            os.path.join(args.data_home, "models"))
-        if tokenizer is None:
+        if not os.path.isfile("/ssd2/arthur/TREC2019/data/models/spiece.model"):
             logging.info("Loading model from %s", model)
             tokenizer = XLNetTokenizer.from_pretrained(model)
+        else:
+            tokenizer = XLNetTokenizer.from_pretrained(
+                os.path.join(args.data_home, "models"))
     else:
         tokenizer = BertTokenizer.from_pretrained(
             os.path.join(args.data_home, "models"))
         if tokenizer is None:
             tokenizer = BertTokenizer.from_pretrained(model)
     output_line_format = "{}-{}\t{}\t{}\n"
+
+    if current.name == "MainProcess":
+        position = 1
+    else:
+        position = current._identity[0]
     with open("{}/{}-triples.{}".format(args.data_home, args.split, chunk_no), 'w', encoding='utf-8') as outf:
-        if current.name == "MainProcess":
-            position = 1
-        else:
-            position = current._identity[0]
-        for counter, line in tqdm(enumerate(lines), desc="running for {}".format(str(chunk_no).zfill(2)), position=position):
+        for counter, line in tqdm(enumerate(lines),
+                                  desc="running for {}".format(str(chunk_no).zfill(2)),
+                                  total=len(lines),
+                                  position=position):
             try:
                 [topic_id, _, doc_id, ranking, score, _] = line.split()
             except:
@@ -85,25 +91,28 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
 
 
 if __name__ == "__main__":
+    mp.set_start_method('spawn', True)
     mp.set_start_method('fork', True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", type=str, required=True)
     parser.add_argument("--top_k", type=int, default=100)
     parser.add_argument("--data_home", type=str,
-                        default="/ssd2/arthur/TREC2019/data/")
+                        default="/ssd2/arthur/TREC2019/data")
     parser.add_argument("--run_file", type=str, required=True),
     parser.add_argument("--single_thread", action="store_true"),
     parser.add_argument("--XLNet", action="store_true")
-    logging.basicConfig(level=logging.getLevelName("INFO"))
+    parser.add_argument("--n_threads", type=int, default=-1)
+    # logging.basicConfig(level=logging.getLevelName("INFO"))
     if len(sys.argv) > 3:
         args = parser.parse_args(sys.argv[1:])
     else:
         argv = [
             "--split", "train",
-            "--run_file", "msmarco-doctrain-top100",
-            "--XLNet"
+            "--run_file", "small-top100",
+            "--XLNet",
+            "--n_threads", "12",
         ]
-        args = parser.parse_args(argv)
+    args = parser.parse_args(argv)
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
 
@@ -171,16 +180,22 @@ if __name__ == "__main__":
                 else:
                     qrel[topicid] = [docid]
     # pre-process positions for each chunk
-    cpus = mp.cpu_count()
+    if args.n_threads > 0:
+        cpus = min(mp.cpu_count(), args.n_threads)
+    else:
+        cpus = mp.cpu_count()
 
     if args.single_thread:
         cpus = 1
+
     print("running with {} cpus".format(cpus))
-    number_of_chunks = cpus
-    block_offset = dict()
-    lines_per_chunk = number_of_lines_to_process // cpus
-    print("{}  lines per chunk".format(lines_per_chunk))
     excess_lines = number_of_lines_to_process % cpus
+    number_of_chunks = cpus
+    if excess_lines > 0:
+        number_of_chunks = cpus - 1
+    block_offset = dict()
+    lines_per_chunk = number_of_lines_to_process // number_of_chunks
+    print("{}  lines per chunk".format(lines_per_chunk))
     start = 0
     if cpus < 2:
         block_offset[0] = 0
