@@ -72,9 +72,10 @@ def fine_tune(
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
         # Ignore any GPU? (usefull if there is more users on current machine, already using a GPU)
-        for _id in args.ignore_gpu_ids:
-            if _id in gpu_ids:
-                gpu_ids.remove(_id)
+        if args.ignore_gpu_ids is not None:
+            for _id in args.ignore_gpu_ids:
+                if _id in gpu_ids:
+                    gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
         args.train_batch_size = args.per_gpu_train_batch_size * max(1, len(gpu_ids))
