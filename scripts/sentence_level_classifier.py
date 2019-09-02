@@ -66,9 +66,6 @@ def fine_tune(
     logging.info("Using device {}".format(device))
     model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     logging.info("Model loaded")
-    if args.n_workers is None:
-        args.n_workers = multiprocessing.cpu_count() - 2
-
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
         # Ignore any GPU? (usefull if there is more users on current machine, already using a GPU)
