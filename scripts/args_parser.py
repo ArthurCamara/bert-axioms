@@ -38,7 +38,7 @@ def getArgs(argv=None):
                         default=1)
     parser.add_argument("--ignore_gpu_ids", type=str)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--n_workers", type=int,
+    parser.add_argument("--n_workers", type=int, default=0,
                         help="Number of workers for the dataset loader")
     parser.add_argument("--eval_steps", type=int, default=200,
                         help="How many iterations to run before running on the Eval dataset")
