@@ -21,7 +21,7 @@ def getArgs(argv=None):
                         help="Should the retrieval step run?")
     parser.add_argument("--bert_model", type=str,
                         default="bert-base-uncased",
-                        help="Bert/XLNet Model to be used")
+                        help="Bert/XLNet/DistilBERT Model to be used")
     parser.add_argument("--train_batch_size", type=int,
                         default=32, help="Size of the training batch")
     parser.add_argument("--eval_batch_size", type=int,

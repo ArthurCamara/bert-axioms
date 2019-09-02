@@ -1,6 +1,6 @@
 from msmarco_dataset import MsMarcoDataset
 from pytorch_transformers import (BertForNextSentencePrediction,
-                                  AdamW, WarmupLinearSchedule)
+                                  AdamW, WarmupLinearSchedule, DistilBertForSequenceClassification)
 import random
 import numpy as np
 import torch
@@ -48,6 +48,7 @@ def fine_tune(
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    is_distill = "distilbert" in args.bert_model
     # Set CUDA
     n_gpu = 0
     if torch.cuda.is_available():
@@ -64,7 +65,10 @@ def fine_tune(
     device = torch.device("cuda" if (torch.cuda.is_available()
                                      and n_gpu > 0 and args.limit_gpus != 1) else "cpu")
     logging.info("Using device {}".format(device))
-    model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
+    if is_distill:
+        model = DistilBertForSequenceClassification.from_pretrained(args.bert_model)
+    else:
+        model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     logging.info("Model loaded")
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
@@ -75,7 +79,8 @@ def fine_tune(
                     gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
-        args.train_batch_size = args.per_gpu_train_batch_size * max(1, len(gpu_ids))
+        args.train_batch_size = args.per_gpu_train_batch_size * \
+            max(1, len(gpu_ids))
     if n_gpu > 0:
         device_0 = torch.device("cuda:{}" .format(gpu_ids[0]))
         model.to(device_0)
@@ -90,6 +95,7 @@ def fine_tune(
 
     logger.info("******Started trainning******")
     logger.info("   Num samples = %d", len(train_dataset))
+    logger.info("   Training model %s", args.bert_model)
     logger.info("   Num Epochs = %d", args.n_epochs)
     logger.info("  Instantaneous batch size per GPU = %d",
                 args.per_gpu_train_batch_size)
@@ -106,10 +112,16 @@ def fine_tune(
         for step, batch in tqdm(enumerate(data_loader), desc="Batches"):
             model.train()
             batch = tuple(t.to(device) for t in batch)
-            inputs = {'input_ids': batch[0],
-                      'attention_mask': batch[1],
-                      'token_type_ids': batch[2],
-                      'next_sentence_label': batch[3]}
+            if not is_distill:
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'token_type_ids': batch[2],
+                          'next_sentence_label': batch[3]}
+            else:
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'labels': batch[3]}
+
             outputs = model(**inputs)
 
             loss = outputs[0]
@@ -154,13 +166,13 @@ def fine_tune(
 
 def evaluate(eval_dataset: MsMarcoDataset,
              output_dir: str,
-             model: BertForNextSentencePrediction,
+             model,
              device: str,
              eval_output_dir: str,
              task_name="msmarco",
              prefix="",
-             eval_batchsize=128,
-             n_workers=2):
+             eval_batchsize=32,
+             n_workers=0):
     results = {}
     eval_dataloader = DataLoader(
         eval_dataset, batch_size=eval_batchsize, shuffle=False, num_workers=n_workers)
@@ -172,20 +184,28 @@ def evaluate(eval_dataset: MsMarcoDataset,
         model.eval()
         batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
-            inputs = {
-                'input_ids': batch[0],
-                'attention_mask': batch[1],
-                'token_type_ids': batch[2],
-                'next_sentence_label': batch[3]
-            }
-            outputs = model(**inputs)
-            tmp_eval_loss, logits = outputs[:2]
-            eval_loss += tmp_eval_loss.mean().item()
+            if isinstance(model.module, DistilBertForSequenceClassification):
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'labels': batch[3]}
+            else:
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'token_type_ids': batch[2],
+                          'next_sentence_label': batch[3]}
+
+        outputs = model(**inputs)
+        tmp_eval_loss, logits = outputs[:2]
+        eval_loss += tmp_eval_loss.mean().item()
         nb_eval_steps += 1
         if preds is None:
             preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs['next_sentence_label'].detach(
-            ).cpu().numpy().flatten()
+            if 'next_sentence_label' in inputs:
+                out_label_ids = inputs['next_sentence_label'].detach(
+                ).cpu().numpy().flatten()
+            else:
+                out_label_ids = inputs['labels'].detach(
+                ).cpu().numpy().flatten()
         else:
             batch_predictions = logits.detach().cpu().numpy()
             preds = np.append(preds, batch_predictions, axis=0)
@@ -221,13 +241,19 @@ if __name__ == "__main__":
             "--dev_file", data_dir + "/dev-triples.0",
             "--per_gpu_train_batch_size", "8",
             "--train_batch_size", "32",
+            "--eval_batch_size", "64",
             "--gradient_accumulation_steps", "10",
-            "--ignore_gpu_ids", "0,1,5,7",
+            "--ignore_gpu_ids", "0,1,2,5,6",
             "--limit_gpus", "-1",
-            "--eval_steps", "10"
+            "--eval_steps", "10",
+            "--bert_model", "distilbert-base-uncased"
         ]
+
     args = getArgs(argv)
+    is_distil = "distilbert" in args.bert_model
     logging.basicConfig(level=logging.getLevelName(args.log_level))
-    train_dataset = MsMarcoDataset(args.train_file, args.data_dir)
-    dev_dataset = MsMarcoDataset(args.dev_file, args.data_dir)
+    train_dataset = MsMarcoDataset(
+        args.train_file, args.data_dir, distil=is_distil, invert_label=(not is_distil))
+    dev_dataset = MsMarcoDataset(
+        args.dev_file, args.data_dir, distil=is_distil, invert_label=(not is_distil))
     fine_tune(train_dataset, dev_dataset, args)
