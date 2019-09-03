@@ -209,8 +209,12 @@ def evaluate(eval_dataset: MsMarcoDataset,
         else:
             batch_predictions = logits.detach().cpu().numpy()
             preds = np.append(preds, batch_predictions, axis=0)
-            out_label_ids = np.append(
-                out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy().flatten(), axis=0)
+            if 'next_sentence_label' in inputs:
+                out_label_ids = np.append(
+                    out_label_ids, inputs['next_sentence_label'].detach().cpu().numpy().flatten(), axis=0)
+            else:
+                out_label_ids = np.append(
+                    out_label_ids, inputs['labels'].detach().cpu().numpy().flatten(), axis=0)
         eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=1)
     assert len(preds) == len(out_label_ids)
@@ -239,12 +243,9 @@ if __name__ == "__main__":
             "--data_dir", data_dir,
             "--train_file", data_dir + "/train-triples.0",
             "--dev_file", data_dir + "/dev-triples.0",
-            "--per_gpu_train_batch_size", "8",
-            "--train_batch_size", "32",
             "--eval_batch_size", "64",
             "--gradient_accumulation_steps", "10",
             "--ignore_gpu_ids", "0,1,2,5,6",
-            "--limit_gpus", "-1",
             "--eval_steps", "10",
             "--bert_model", "distilbert-base-uncased"
         ]
