@@ -12,6 +12,7 @@ from sklearn.metrics import f1_score, average_precision_score, accuracy_score
 from args_parser import getArgs
 import os
 import sys
+import math
 multiprocessing.set_start_method('spawn', True)
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,6 @@ def fine_tune(
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                logger.info("BACKWARD PASS")
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
@@ -173,7 +173,8 @@ def evaluate(eval_dataset: MsMarcoDataset,
              task_name="msmarco",
              prefix="",
              eval_batchsize=32,
-             n_workers=0):
+             n_workers=0,
+             sample=1.0):
     results = {}
     eval_dataloader = DataLoader(
         eval_dataset, batch_size=eval_batchsize, shuffle=False, num_workers=n_workers)
@@ -181,7 +182,15 @@ def evaluate(eval_dataset: MsMarcoDataset,
     nb_eval_steps = 0
     preds = None
     out_label_ids = None
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
+    starting_index = 0
+    max_feasible_index = len(eval_dataloader) - \
+        math.floor(len(eval_dataloader) * sample)
+    if max_feasible_index > 0:
+        starting_index = random.choice(range(max_feasible_index))
+    ending_index = starting_index + math.floor(len(eval_dataloader) * sample)
+    for index, batch in tqdm(eval_dataloader, desc="Evaluating"):
+        if index < starting_index or index > ending_index:
+            continue
         model.eval()
         with torch.no_grad():
             if isinstance(model.module, DistilBertForSequenceClassification):
