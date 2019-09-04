@@ -139,6 +139,7 @@ def fine_tune(
                 model.zero_grad()
             global_step += 1
             if global_step % args.eval_steps == 0:
+                del batch
                 print("Training loss: {}".format(tr_loss))
                 _ = evaluate(dev_dataset,
                              args.data_dir,
