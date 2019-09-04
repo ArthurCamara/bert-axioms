@@ -66,7 +66,8 @@ def fine_tune(
                                      and n_gpu > 0 and args.limit_gpus != 1) else "cpu")
     logging.info("Using device {}".format(device))
     if is_distill:
-        model = DistilBertForSequenceClassification.from_pretrained(args.bert_model)
+        model = DistilBertForSequenceClassification.from_pretrained(
+            args.bert_model)
     else:
         model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     logging.info("Model loaded")
@@ -79,13 +80,12 @@ def fine_tune(
                     gpu_ids.remove(_id)
         model = torch.nn.DataParallel(model, device_ids=gpu_ids)
         print("Using device IDs {}".format(str(gpu_ids)))
-        args.train_batch_size = args.per_gpu_train_batch_size * \
-            max(1, len(gpu_ids))
-    if n_gpu > 0:
+    if n_gpu > 0 and args.ignore_gpu_ids is not None:
         device_0 = torch.device("cuda:{}" .format(gpu_ids[0]))
         model.to(device_0)
     else:
         model.to(device)
+    print(args.train_batch_size)
     data_loader = DataLoader(
         train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.n_workers)
     num_train_optimization_steps = len(
@@ -109,14 +109,13 @@ def fine_tune(
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     for _ in tqdm(range(args.n_epochs), desc="Epochs"):
-        for step, batch in tqdm(enumerate(data_loader), desc="Batches"):
+        for step, batch in tqdm(enumerate(data_loader), desc="Batches", total=len(data_loader)):
             model.train()
-            batch = tuple(t.to(device) for t in batch)
             if not is_distill:
-                inputs = {'input_ids': batch[0],
-                          'attention_mask': batch[1],
-                          'token_type_ids': batch[2],
-                          'next_sentence_label': batch[3]}
+                inputs = {'input_ids': batch[0].to(device),
+                          'attention_mask': batch[1].to(device),
+                          'token_type_ids': batch[2].to(device),
+                          'next_sentence_label': batch[3].to(device)}
             else:
                 inputs = {'input_ids': batch[0],
                           'attention_mask': batch[1],
@@ -134,6 +133,7 @@ def fine_tune(
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
+                logger.info("BACKWARD PASS")
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
@@ -182,17 +182,16 @@ def evaluate(eval_dataset: MsMarcoDataset,
     out_label_ids = None
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
-        batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
             if isinstance(model.module, DistilBertForSequenceClassification):
-                inputs = {'input_ids': batch[0],
-                          'attention_mask': batch[1],
-                          'labels': batch[3]}
+                inputs = {'input_ids': batch[0].to(device),
+                          'attention_mask': batch[1].to(device),
+                          'labels': batch[3].to(device)}
             else:
-                inputs = {'input_ids': batch[0],
-                          'attention_mask': batch[1],
-                          'token_type_ids': batch[2],
-                          'next_sentence_label': batch[3]}
+                inputs = {'input_ids': batch[0].to(device),
+                          'attention_mask': batch[1].to(device),
+                          'token_type_ids': batch[2].to(device),
+                          'next_sentence_label': batch[3].to(device)}
 
         outputs = model(**inputs)
         tmp_eval_loss, logits = outputs[:2]
@@ -245,7 +244,6 @@ if __name__ == "__main__":
             "--dev_file", data_dir + "/dev-triples.0",
             "--eval_batch_size", "64",
             "--gradient_accumulation_steps", "10",
-            "--ignore_gpu_ids", "0,1,2,5,6",
             "--eval_steps", "10",
             "--bert_model", "distilbert-base-uncased"
         ]
