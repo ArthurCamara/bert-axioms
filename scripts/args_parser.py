@@ -42,8 +42,9 @@ def getArgs(argv=None):
                         help="Number of workers for the dataset loader")
     parser.add_argument("--eval_steps", type=int, default=200,
                         help="How many iterations to run before running on the Eval dataset")
-    parser.add_argument("--eval_sample'", type=float, default=1.0,
+    parser.add_argument("--eval_sample", type=float, default=1.0,
                         help="Portion of the dev dataset to be used for evaluation")
+    parser.add_argument("--train_loss_print", type=int, default=200)
     args = parser.parse_args(argv)
     if args.ignore_gpu_ids:
         args.ignore_gpu_ids = list(map(int, args.ignore_gpu_ids.split(",")))
