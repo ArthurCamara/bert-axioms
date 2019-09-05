@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import logging
 from torch.utils.data import DataLoader
+from tor
 from tqdm.auto import tqdm
 import multiprocessing
 from sklearn.metrics import f1_score, average_precision_score, accuracy_score
@@ -13,7 +14,6 @@ from args_parser import getArgs
 import os
 import sys
 import math
-from itertools import islice
 
 multiprocessing.set_start_method('spawn', True)
 
@@ -268,12 +268,11 @@ if __name__ == "__main__":
             "--dev_file", data_dir + "/dev-triples.top100",
             "--eval_batch_size", "32",
             "--eval_steps", "200",
-            # "--bert_model", "distilbert-base-uncased",
-            "--train_batch_size", "32",
+            "--bert_model", "distilbert-base-uncased",
+            "--train_batch_size", "128",
             "--eval_sample", "0.1", 
             "--train_loss_print", "20",
             "--ignore_gpu_ids", "6", 
-            "--learning_rate", "5e-6"
         ]
 
     args = getArgs(argv)
