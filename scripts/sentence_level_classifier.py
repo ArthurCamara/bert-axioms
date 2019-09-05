@@ -13,6 +13,7 @@ from args_parser import getArgs
 import os
 import sys
 import math
+from torch.utils.tensorboard import SummaryWriter
 
 
 multiprocessing.set_start_method('spawn', True)
@@ -46,6 +47,8 @@ def fine_tune(
         train_dataset: MsMarcoDataset,
         dev_dataset: MsMarcoDataset,
         args):
+    # initialize tensorboard
+    writer = SummaryWriter()
     # Set random seeds
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -90,7 +93,7 @@ def fine_tune(
         model.to(device)
     print(args.train_batch_size)
     data_loader = DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=False, num_workers=args.n_workers)
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.n_workers)
     num_train_optimization_steps = len(
         data_loader) // args.gradient_accumulation_steps * args.n_epochs
     optimizer, scheduler = init_optimizer(
@@ -146,14 +149,20 @@ def fine_tune(
                 preds = logits.detach().cpu().numpy()
                 preds = np.argmax(preds, axis=1)
                 if 'next_sentence_label' in inputs:
-                    out_label_ids = inputs['next_sentence_label'].detach().cpu().numpy().flatten()
+                    out_label_ids = inputs['next_sentence_label'].detach(
+                    ).cpu().numpy().flatten()
                 else:
-                    out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
+                    out_label_ids = inputs['labels'].detach(
+                    ).cpu().numpy().flatten()
+                writer.add_scalar('Train accuracy', accuracy_score(
+                    out_label_ids, preds), global_step)
+                writer.add_scalar(
+                    'Train loss', (tr_loss - logging_loss) / args.train_loss_print, global_step)
+                writer.add_scalar("LR", scheduler.get_lr()[0], global_step)
                 print("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
-                # print("Train F1: {}".format(
-                    # f1_score(out_label_ids, preds)))
-                print("Training loss: {}".format((tr_loss - logging_loss)/args.train_loss_print))
+                print("Training loss: {}".format(
+                    (tr_loss - logging_loss)/args.train_loss_print))
                 logging_loss = tr_loss
 
             if global_step % args.eval_steps == 0:
@@ -176,6 +185,7 @@ def fine_tune(
                 model_to_save.save_pretrained(output_dir)
                 torch.save(args, os.path.join(output_dir, 'training_args.bin'))
                 logger.info("Saving model checkpoint to %s", output_dir)
+    writer.close()
     return global_step, tr_loss / global_step
 
 
@@ -270,9 +280,10 @@ if __name__ == "__main__":
             "--eval_steps", "200",
             "--bert_model", "distilbert-base-uncased",
             "--train_batch_size", "128",
-            "--eval_sample", "0.1", 
-            "--train_loss_print", "20",
-            "--ignore_gpu_ids", "6", 
+            "--eval_sample", "0.1",
+            "--train_loss_print", "50",
+            "--ignore_gpu_ids", "6",
+            "--learning_rate", "5e-4"
         ]
 
     args = getArgs(argv)
