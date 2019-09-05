@@ -101,9 +101,8 @@ class MsMarcoDataset(Dataset):
             offset = self.offset_dict[did]
         elif isinstance(did, int):
             offset = self.offset_dict[self.index_dict[did]]
-        else:
-            raise NotImplementedError(
-                "can only fetch integer or string indexes")
+        elif isinstance(did, slice):
+            return [self[_id] for _id in range(did.start, did.stop)]
         with open(self.tsv_path) as f:
             f.seek(offset)
             line = f.readline()

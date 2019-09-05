@@ -13,6 +13,8 @@ from args_parser import getArgs
 import os
 import sys
 import math
+from itertools import islice
+
 multiprocessing.set_start_method('spawn', True)
 
 logger = logging.getLogger(__name__)
@@ -88,7 +90,7 @@ def fine_tune(
         model.to(device)
     print(args.train_batch_size)
     data_loader = DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=args.n_workers)
+        train_dataset, batch_size=args.train_batch_size, shuffle=False, num_workers=args.n_workers)
     num_train_optimization_steps = len(
         data_loader) // args.gradient_accumulation_steps * args.n_epochs
     optimizer, scheduler = init_optimizer(
@@ -99,7 +101,7 @@ def fine_tune(
     logger.info("   Training model %s", args.bert_model)
     logger.info("   Num Epochs = %d", args.n_epochs)
     logger.info("  Instantaneous batch size per GPU = %d",
-                args.per_gpu_train_batch_size)
+                args.train_batch_size // n_gpu)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
                 args.train_batch_size * args.gradient_accumulation_steps)
     logger.info("  Gradient Accumulation steps = %d",
@@ -131,27 +133,39 @@ def fine_tune(
                 loss = loss / args.gradient_accumulation_steps
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             loss.backward()
-
             tr_loss += loss.item()
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
             global_step += 1
+            if global_step % args.train_loss_print == 0:
+                # print(loss.item())
+                logits = outputs[1]
+                preds = logits.detach().cpu().numpy()
+                preds = np.argmax(preds, axis=1)
+                if 'next_sentence_label' in inputs:
+                    out_label_ids = inputs['next_sentence_label'].detach().cpu().numpy().flatten()
+                else:
+                    out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
+                print("Train accuracy: {}".format(
+                    accuracy_score(out_label_ids, preds)))
+                # print("Train F1: {}".format(
+                    # f1_score(out_label_ids, preds)))
+                print("Training loss: {}".format((tr_loss - logging_loss)/args.train_loss_print))
+                logging_loss = tr_loss
+
             if global_step % args.eval_steps == 0:
-                del batch
-                print("Training loss: {}".format(tr_loss))
                 _ = evaluate(dev_dataset,
                              args.data_dir,
                              model,
                              device,
                              args.data_dir,
                              eval_batchsize=args.eval_batch_size,
-                             n_workers=args.n_workers)
+                             n_workers=args.n_workers,
+                             sample=args.eval_sample)
                 print("\tlr: \t{}".format(scheduler.get_lr()[0]))
-                print("\tLoss:\t{}".format(
-                    tr_loss - logging_loss / args.eval_steps))
-                logging_loss = tr_loss
                 # Save model
                 output_dir = os.path.join(
                     args.data_dir, "checkpoint-{}".format(global_step))
@@ -176,21 +190,21 @@ def evaluate(eval_dataset: MsMarcoDataset,
              n_workers=0,
              sample=1.0):
     results = {}
+    starting_index = 0
+    max_feasible_index = len(eval_dataset) - \
+        math.floor(len(eval_dataset) * sample)
+    if max_feasible_index > 0:
+        starting_index = random.choice(range(max_feasible_index))
+    ending_index = starting_index + math.floor(len(eval_dataset) * sample)
+
     eval_dataloader = DataLoader(
-        eval_dataset, batch_size=eval_batchsize, shuffle=False, num_workers=n_workers)
+        eval_dataset[starting_index:ending_index], batch_size=eval_batchsize, shuffle=False, num_workers=n_workers)
     eval_loss = 0.0
     nb_eval_steps = 0
     preds = None
     out_label_ids = None
-    starting_index = 0
-    max_feasible_index = len(eval_dataloader) - \
-        math.floor(len(eval_dataloader) * sample)
-    if max_feasible_index > 0:
-        starting_index = random.choice(range(max_feasible_index))
-    ending_index = starting_index + math.floor(len(eval_dataloader) * sample)
-    for index, batch in tqdm(eval_dataloader, desc="Evaluating"):
-        if index < starting_index or index > ending_index:
-            continue
+
+    for batch in tqdm(eval_dataloader, desc="Eval batch"):
         model.eval()
         with torch.no_grad():
             if isinstance(model.module, DistilBertForSequenceClassification):
@@ -250,19 +264,24 @@ if __name__ == "__main__":
     else:
         argv = [
             "--data_dir", data_dir,
-            "--train_file", data_dir + "/train-triples.0",
-            "--dev_file", data_dir + "/dev-triples.0",
-            "--eval_batch_size", "64",
-            "--gradient_accumulation_steps", "10",
-            "--eval_steps", "10",
-            "--bert_model", "distilbert-base-uncased"
+            "--train_file", data_dir + "/train-triples.top100",
+            "--dev_file", data_dir + "/dev-triples.top100",
+            "--eval_batch_size", "32",
+            "--eval_steps", "200",
+            # "--bert_model", "distilbert-base-uncased",
+            "--train_batch_size", "32",
+            "--eval_sample", "0.1", 
+            "--train_loss_print", "20",
+            "--ignore_gpu_ids", "6", 
+            "--learning_rate", "5e-6"
         ]
 
     args = getArgs(argv)
+
     is_distil = "distilbert" in args.bert_model
     logging.basicConfig(level=logging.getLevelName(args.log_level))
     train_dataset = MsMarcoDataset(
-        args.train_file, args.data_dir, distil=is_distil, invert_label=(not is_distil))
+        args.train_file, args.data_dir, distil=is_distil, invert_label=True)
     dev_dataset = MsMarcoDataset(
-        args.dev_file, args.data_dir, distil=is_distil, invert_label=(not is_distil))
+        args.dev_file, args.data_dir, distil=is_distil, invert_label=True)
     fine_tune(train_dataset, dev_dataset, args)
