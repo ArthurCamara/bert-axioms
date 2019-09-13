@@ -15,6 +15,8 @@ import sys
 import math
 from torch.utils.tensorboard import SummaryWriter
 
+writer = SummaryWriter()
+
 
 multiprocessing.set_start_method('spawn', True)
 
@@ -47,13 +49,12 @@ def fine_tune(
         train_dataset: MsMarcoDataset,
         dev_dataset: MsMarcoDataset,
         args):
-    # initialize tensorboard
-    writer = SummaryWriter()
+
     # Set random seeds
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-
+    
     is_distill = "distilbert" in args.bert_model
     # Set CUDA
     n_gpu = 0
@@ -77,6 +78,7 @@ def fine_tune(
     else:
         model = BertForNextSentencePrediction.from_pretrained(args.bert_model)
     logging.info("Model loaded")
+    # writer.add_graph(model)
     if n_gpu > 0:
         gpu_ids = list(range(n_gpu))
         # Ignore any GPU? (usefull if there is more users on current machine, already using a GPU)
@@ -142,6 +144,9 @@ def fine_tune(
                 optimizer.step()
                 scheduler.step()
                 model.zero_grad()
+                writer.add_scalar(
+                    'Train_loss', (tr_loss - logging_loss) / args.train_loss_print, global_step)
+                writer.add_scalar("LR", scheduler.get_lr()[0], global_step)
             global_step += 1
             if global_step % args.train_loss_print == 0:
                 # print(loss.item())
@@ -154,15 +159,12 @@ def fine_tune(
                 else:
                     out_label_ids = inputs['labels'].detach(
                     ).cpu().numpy().flatten()
-                writer.add_scalar('Train accuracy', accuracy_score(
+                writer.add_scalar('Train_accuracy', accuracy_score(
                     out_label_ids, preds), global_step)
-                writer.add_scalar(
-                    'Train loss', (tr_loss - logging_loss) / args.train_loss_print, global_step)
-                writer.add_scalar("LR", scheduler.get_lr()[0], global_step)
                 print("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
                 print("Training loss: {}".format(
-                    (tr_loss - logging_loss)/args.train_loss_print))
+                    (tr_loss - logging_loss) / args.train_loss_print))
                 logging_loss = tr_loss
 
             if global_step % args.eval_steps == 0:
@@ -186,7 +188,6 @@ def fine_tune(
                 torch.save(args, os.path.join(output_dir, 'training_args.bin'))
                 logger.info("Saving model checkpoint to %s", output_dir)
     writer.close()
-    return global_step, tr_loss / global_step
 
 
 def evaluate(eval_dataset: MsMarcoDataset,
@@ -274,16 +275,16 @@ if __name__ == "__main__":
     else:
         argv = [
             "--data_dir", data_dir,
-            "--train_file", data_dir + "/train-triples.top100",
-            "--dev_file", data_dir + "/dev-triples.top100",
+            "--train_file", data_dir + "/triples-tokenized/train-triples.10neg",
+            "--dev_file", data_dir + "/triples-tokenized/fulldev-triples.10neg",
             "--eval_batch_size", "32",
             "--eval_steps", "200",
             "--bert_model", "distilbert-base-uncased",
             "--train_batch_size", "128",
-            "--eval_sample", "0.1",
-            "--train_loss_print", "50",
-            "--ignore_gpu_ids", "6",
-            "--learning_rate", "5e-4"
+            "--eval_sample", "1.0",
+            "--eval_steps", "1000",
+            "--train_loss_print", "200",
+            "--learning_rate", "5e-5"
         ]
 
     args = getArgs(argv)
