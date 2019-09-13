@@ -101,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument("--run_file", type=str, required=True),
     parser.add_argument("--single_thread", action="store_true"),
     parser.add_argument("--XLNet", action="store_true")
-    parser.add_argument("--n_threads", type=int, default=-1)
+    parser.add_argument("--n_threads", type=int, default=1)
     # logging.basicConfig(level=logging.getLevelName("INFO"))
     if len(sys.argv) > 3:
         argv = sys.argv[1:]
