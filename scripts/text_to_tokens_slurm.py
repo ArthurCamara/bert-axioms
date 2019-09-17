@@ -120,7 +120,7 @@ if __name__ == "__main__":
     if not os.path.isfile(queries_file):
         queries_file = queries_file.replace(".gz", "")
 
-    lookup_file = os.path.join(data_home, "LNC2-msmarco-docs.lookup.tsv")
+    lookup_file = os.path.join(data_home, "msmarco-docs-lookup.tsv.gz")
     if not os.path.isfile(lookup_file):
         lookup_file = lookup_file.replace(".gz", "")
 
