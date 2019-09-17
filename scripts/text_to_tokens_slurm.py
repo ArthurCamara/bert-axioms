@@ -108,8 +108,7 @@ if __name__ == "__main__":
     else:
         argv = [
             "--split", "train",
-            "--run_file", "small-top100",
-            "--XLNet",
+            "--run_file", "LNC2_indri.run",
             "--n_threads", "12",
         ]
     args = parser.parse_args(argv)
@@ -121,7 +120,7 @@ if __name__ == "__main__":
     if not os.path.isfile(queries_file):
         queries_file = queries_file.replace(".gz", "")
 
-    lookup_file = os.path.join(data_home, "msmarco-docs-lookup.tsv.gz")
+    lookup_file = os.path.join(data_home, "LNC2-msmarco-docs.lookup.tsv")
     if not os.path.isfile(lookup_file):
         lookup_file = lookup_file.replace(".gz", "")
 

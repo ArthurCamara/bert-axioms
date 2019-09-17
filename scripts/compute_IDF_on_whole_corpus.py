@@ -1,44 +1,32 @@
 import multiprocessing as mp
-from multiprocessing import current_process
-
 import os
 import sys
 import argparse
-import csv
-import subprocess
 import pickle
-import gzip
 from tqdm.auto import tqdm
 from pytorch_transformers import BertTokenizer
 from collections import Counter
 mp.set_start_method('spawn', True)
 
 
-def getcontent(docid, file_name):
-    """getcontent(docid, f) will get content for a given docid (a string) from filehandle f.
-    The content has four tab-separated strings: docid, url, title, body.
-    """
-    with open(file_name, encoding='utf-8') as f:
-        f.seek(docoffset[docid])
-        line = f.readline()
-        assert line.startswith(docid + "\t"), \
-            f"Looking for {docid}, found {line}"
-    return line.rstrip()
-
-
 def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
-    current = current_process()
-    lines = []
+    DFS = Counter()
+    tokenizer = BertTokenizer.from_pretrained(model)
+    position = chunk_no + 1
+
+    pbar = tqdm(total=no_lines, desc="Running for chunk {}".format(
+        str(chunk_no).zfill(2)), position=position)
     with open(inf, 'r') as f:
         f.seek(block_offset[chunk_no])
         for i in range(no_lines):
-            lines.append(f.readline().strip())
-
-    tokenizer = BertTokenizer.from_pretrained(model)
-    if current.name == "MainProcess":
-        position = 1
-    else:
-        position = current._identity[0]
+            doc = " ".join(f.readline().split("\t")[1:])
+            tokens = set(tokenizer.tokenize(doc)[:512])
+            for w in tokens:
+                DFS[w] += 1
+            pbar.update()
+    pbar.close()
+    pickle.dump(DFS, open(os.path.join(
+        args.output_dir, "IDFS-{}".format(chunk_no)), 'wb'))
 
 
 if __name__ == "__main__":
@@ -56,7 +44,8 @@ if __name__ == "__main__":
         argv = [
             "--data_home", "/ssd2/arthur/TREC2019/data",
             "--docs_file", "/ssd2/arthur/TREC2019/data/docs/msmarco-docs.tsv",
-            "--output_dir", "/ssd2/arthur/TREC2019/data/docs/IDFS/"
+            "--output_dir", "/ssd2/arthur/TREC2019/data/docs/IDFS/",
+            "--n_threads", "50"
         ]
         args = parser.parse_args(argv)
     if not os.path.isdir(args.output_dir):
@@ -81,21 +70,6 @@ if __name__ == "__main__":
     print("{}  lines for last chunk".format(excess_lines))
     assert number_of_chunks * lines_per_chunk + excess_lines == args.total_lines
 
-    lookup_file = os.path.join(args.data_home, "docs", "msmarco-docs-lookup.tsv.gz")
-    if not os.path.isfile(lookup_file):
-        lookup_file = lookup_file.replace(".gz", "")
-    docoffset = {}
-    if lookup_file.endswith(".gz"):
-        with gzip.open(lookup_file, 'rt', encoding='utf-8') as f:
-            tsvreader = csv.reader(f, delimiter="\t")
-            for [docid, _, offset] in tsvreader:
-                docoffset[docid] = int(offset)
-    else:
-        with open(lookup_file, 'r', encoding='utf-8') as f:
-            tsvreader = csv.reader(f, delimiter="\t")
-            for [docid, _, offset] in tsvreader:
-                docoffset[docid] = int(offset)
-
     block_offset = {}
     start = 0
     if cpus < 2:
@@ -111,12 +85,30 @@ if __name__ == "__main__":
                     current_chunk += 1
                 line = f.readline()
                 counter += 1
-    pbar = tqdm(total=cpus)
+    pbar = tqdm(total=cpus, position=0)
     model = 'bert-base-uncased'
 
     def update(*a):
         pbar.update()
     if args.single_thread:
-        process_chunk(0, block_offset, args.docs_file, args, model)
+        process_chunk(0, block_offset, args.docs_file,
+                      lines_per_chunk, args, model)
         sys.exit(0)
 
+    pool = mp.Pool(cpus)
+    jobs = []
+    for i in range(len(block_offset)):
+        jobs.append(pool.apply_async(process_chunk, args=(
+            i, block_offset, args.docs_file, lines_per_chunk, args, model), callback=update))
+    for job in jobs:
+        job.get()
+    pool.close()
+    pbar.close()
+
+    # join results
+    full_IDFS = Counter()
+    for i in range(len(block_offset)):
+        _idf = pickle.load(open(os.path.join(args.output_dir, "IDFS-{}".format(i)), 'rb'))
+        for k in _idf:
+            full_IDFS[k] += _idf[k]
+    pickle.dump(full_IDFS, open(os.path.join(args.output_dir, "IDFS-FULL"), 'wb'))

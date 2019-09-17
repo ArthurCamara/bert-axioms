@@ -15,6 +15,7 @@ class MsMarcoDataset(Dataset):
             tsv_file: str,
             data_dir: str,
             max_seq_len=512,
+            labeled=True,
             size=None,
             transform=None,
             invert_label=True,
@@ -41,6 +42,7 @@ class MsMarcoDataset(Dataset):
         self.max_seq_len = max_seq_len
         self.xlnet = xlnet
         self.distil = distil
+        self.labeled = labeled
         if tsv_file.endswith("train-triples.top100"):
             size = 361276621
         elif tsv_file.endswith("train-triples.10neg"):
@@ -87,7 +89,16 @@ class MsMarcoDataset(Dataset):
             pbar.update()
             idx = 0
             while line:
-                [did, _, _] = line.decode().split("\t")
+                if len(line) < 2:
+                    line = f.readline().encode("utf-8")
+                    pbar.update()
+                    location = f.tell()
+                    self.size -= 1
+                    continue
+                if self.labeled:
+                    [did, _, _] = line.decode().split("\t")
+                else:
+                    [did, _] = line.decode().split("\t")
                 offset_dict[did] = location
                 index_dict[idx] = did
                 location = f.tell()
@@ -120,7 +131,10 @@ class MsMarcoDataset(Dataset):
 
         line = sample.strip().decode().split("\t")
         tokens = eval(line[1])
-        label = line[-1]
+        if self.labeled:
+            label = line[-1]
+        else:
+            label = None
 
         sep_index = tokens.index("[SEP]")
 
@@ -141,16 +155,23 @@ class MsMarcoDataset(Dataset):
         assert len(input_mask) == self.max_seq_len, "input_mask"
         assert len(segment_ids) == self.max_seq_len, "segment_ids"
 
-        label_id = self.label_map[label]
-        return (
-            torch.tensor(input_ids, dtype=torch.long),
-            torch.tensor(input_mask, dtype=torch.long),
-            torch.tensor(segment_ids, dtype=torch.long),
-            torch.tensor([label_id], dtype=torch.long))
+        if self.labeled:
+            label_id = self.label_map[label]
+            return (
+                torch.tensor(input_ids, dtype=torch.long),
+                torch.tensor(input_mask, dtype=torch.long),
+                torch.tensor(segment_ids, dtype=torch.long),
+                torch.tensor([label_id], dtype=torch.long))
+        else:
+            return (
+                torch.tensor(input_ids, dtype=torch.long),
+                torch.tensor(input_mask, dtype=torch.long),
+                torch.tensor(segment_ids, dtype=torch.long))
 
 
 if __name__ == "__main__":
     dataset = MsMarcoDataset(
-        "/ssd2/arthur/insy/msmarco/data/dev-triples.0", "/ssd2/arthur/TREC2019/data")
-    data_loader = DataLoader(
-        dataset, batch_size=32, shuffle=True, num_workers=4)
+        "/ssd2/arthur/TREC2019/data/triples-tokenized/LNC2_test-triples.top100.no_label", "/ssd2/arthur/TREC2019/data", force=True, labeled=False)
+    dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
+    for index, batch in tqdm(enumerate(dataloader), desc="{} Dataset".format(dataset), total=len(dataloader)):
+        pass
