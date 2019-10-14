@@ -59,7 +59,7 @@ def fine_tune(
     # Set CUDA
     n_gpu = 0
     if torch.cuda.is_available():
-        logging.info("Using CUDA")
+
         torch.cuda.manual_seed_all(args.seed)
         # We DO NOT want to limit the number of GPUs to be used
         if args.limit_gpus < 0:
@@ -120,10 +120,10 @@ def fine_tune(
         for step, batch in tqdm(enumerate(data_loader), desc="Batches", total=len(data_loader)):
             model.train()
             if not is_distill:
-                inputs = {'input_ids': batch[0].to(device),
-                          'attention_mask': batch[1].to(device),
-                          'token_type_ids': batch[2].to(device),
-                          'next_sentence_label': batch[3].to(device)}
+                    inputs = {'input_ids': batch[0].to(device), # [CLS, w_id, w2_id, SEP, w_id, w_id, SEP]
+                            'attention_mask': batch[1].to(device), # 111111
+                            'token_type_ids': batch[2].to(device),
+                            'next_sentence_label': batch[3].to(device)}
             else:
                 inputs = {'input_ids': batch[0],
                           'attention_mask': batch[1],
@@ -275,16 +275,16 @@ if __name__ == "__main__":
     else:
         argv = [
             "--data_dir", data_dir,
-            "--train_file", data_dir + "/triples-tokenized/train-triples.10neg",
-            "--dev_file", data_dir + "/triples-tokenized/fulldev-triples.10neg",
+            "--train_file", data_dir + "/triples-tokenized/cut-train.10neg.fix",
+            "--dev_file", data_dir + "/triples-tokenized/cut-dev.10neg",
             "--eval_batch_size", "32",
-            "--eval_steps", "200",
             "--bert_model", "distilbert-base-uncased",
-            "--train_batch_size", "128",
+            "--train_batch_size", "152",
             "--eval_sample", "1.0",
-            "--eval_steps", "1000",
+            "--eval_steps", "400",
             "--train_loss_print", "200",
-            "--learning_rate", "5e-5"
+            "--learning_rate", "5e-5",
+            "--eval_sample", "0.2"
         ]
 
     args = getArgs(argv)
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     is_distil = "distilbert" in args.bert_model
     logging.basicConfig(level=logging.getLevelName(args.log_level))
     train_dataset = MsMarcoDataset(
-        args.train_file, args.data_dir, distil=is_distil, invert_label=True)
+        args.train_file, args.data_dir, distil=is_distil, invert_label=True, force=True)
     dev_dataset = MsMarcoDataset(
-        args.dev_file, args.data_dir, distil=is_distil, invert_label=True)
+        args.dev_file, args.data_dir, distil=is_distil, invert_label=True, force=True)
     fine_tune(train_dataset, dev_dataset, args)

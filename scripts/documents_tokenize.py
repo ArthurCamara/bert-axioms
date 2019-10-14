@@ -1,5 +1,4 @@
 import multiprocessing as mp
-from multiprocessing import current_process
 
 import os
 import sys
@@ -23,8 +22,9 @@ def getcontent(docid, file_name):
 
 
 def text_to_tokens(document, tokenizer):
-    tokens = tokenizer.tokenize(document)
-    return tokens
+    tokens = tokenizer.tokenize(document)[:500]
+    de_tokenized = ' '.join([x for x in tokens]).replace(' ##', '')  # naive, but works
+    return de_tokenized
 
 
 def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
@@ -33,9 +33,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
         f.seek(block_offset[chunk_no])
         for i in range(no_lines):
             lines.append(f.readline().strip())
-    tokenizer = BertTokenizer.from_pretrained(os.path.join(args.data_home, "models"))
-    if tokenizer is None:
-        tokenizer = BertTokenizer.from_pretrained(model)
+    tokenizer = BertTokenizer.from_pretrained(model)
     output_line_format = "{}\t{}\n"
     position = chunk_no + 1
     with open("{}/tokenized-docs.triples.{}".format(args.data_home, chunk_no), 'w', encoding='utf-8') as outf:
@@ -49,6 +47,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, args, model=None):
             except:
                 continue
             tokenized = text_to_tokens(document, tokenizer)
+            tokenized_query = 
             outf.write(output_line_format.format(doc_id, tokenized))
 
 
@@ -59,7 +58,7 @@ if __name__ == "__main__":
                         default="/ssd2/arthur/TREC2019/data/docs/")
     parser.add_argument("--single_thread", action="store_true"),
     parser.add_argument("--n_threads", type=int, default=1)
-    if len(sys.argv) > 3:
+    if len(sys.argv) > 2:
         argv = sys.argv[1:]
     else:
         argv = [

@@ -30,8 +30,6 @@ class MsMarcoDataset(Dataset):
             size (int, optional): Number of lines to process. If None, will run wc -l first.
             transform (callable, optional): Transformations to be performed on the data
             invert_label: Must be True if you are planning to use BertForNextSentencePrediction
-            xlnet: If you plan on using XLNet insted of BERT, the [CLS] token must be changed.
-                Set this to True if you plan to. (NOT YET IMPLEMENTED)
             distil: Use distlBERT?
             force: Force to re-compute offset dicts and size
         """
@@ -47,12 +45,12 @@ class MsMarcoDataset(Dataset):
             size = 361276621
         elif tsv_file.endswith("train-triples.10neg"):
             size = 2935878
-        # if tsv_file.endswith("dev-triples.top100"):
-            # size = 519300
-        # elif tsv_file.endswith("dev-triples.10neg"):
-            # size = 43188
+        # if tsv_file.endswith("cut-train.10neg"):
+            # size = 4037132
+        # elif tsv_file.endswith("cut-dev.10neg"):
+            # size = 39974
         if size is None or force:
-            with open(tsv_file) as f:
+            with open(tsv_file, encoding="utf-8", errors="ignore") as f:
                 for i, _ in tqdm(enumerate(f), desc="Counting lines on file..."):
                     pass
             self.size = i + 1
@@ -81,8 +79,7 @@ class MsMarcoDataset(Dataset):
             index_dict = pickle.load(open(index_file, 'rb'))
             return offset_dict, index_dict
 
-        with open(self.tsv_path, encoding="utf-8") as f:
-
+        with open(self.tsv_path, encoding="utf-8", errors="ignore") as f:
             pbar = tqdm(total=self.size, desc="Computing offset dictionary")
             location = f.tell()
             line = f.readline().encode("utf-8")
@@ -119,7 +116,7 @@ class MsMarcoDataset(Dataset):
             offset = self.offset_dict[self.index_dict[did]]
         elif isinstance(did, slice):
             return [self[_id] for _id in range(did.start, did.stop)]
-        with open(self.tsv_path) as f:
+        with open(self.tsv_path, encoding="utf-8", errors="ignore") as f:
             f.seek(offset)
             line = f.readline().encode("utf-8")
         return self.text_to_features(line)
@@ -171,7 +168,7 @@ class MsMarcoDataset(Dataset):
 
 if __name__ == "__main__":
     dataset = MsMarcoDataset(
-        "/ssd2/arthur/TREC2019/data/triples-tokenized/LNC2_test-triples.top100.no_label", "/ssd2/arthur/TREC2019/data", force=True, labeled=False)
+        "/ssd2/arthur/TREC2019/data/triples-tokenized/cut-test.top100", "/ssd2/arthur/TREC2019/data", force=True, labeled=True)
     dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
     for index, batch in tqdm(enumerate(dataloader), desc="{} Dataset".format(dataset), total=len(dataloader)):
         pass

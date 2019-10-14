@@ -43,7 +43,7 @@ if __name__ == "__main__":
     else:
         argv = [
             "--data_home", "/ssd2/arthur/TREC2019/data",
-            "--docs_file", "/ssd2/arthur/TREC2019/data/docs/msmarco-docs.tsv",
+            "--docs_file", "/ssd2/arthur/TREC2019/data/docs/tokenized-msmarco-docs.tsv",
             "--output_dir", "/ssd2/arthur/TREC2019/data/docs/IDFS/",
             "--n_threads", "50"
         ]
