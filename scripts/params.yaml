@@ -1,0 +1,12 @@
+tokenizer_class: "distilbert-base-uncased"
+data_home: "/ssd2/arthur/bert-axioms"
+download_path: "https://msmarco.blob.core.windows.net/msmarcoranking/"
+logging_level: "INFO"
+force_steps: 
+    -  None
+#     -  dev_query_tokenizer
+train_queries: 367013
+full_dev_queries: 5193
+corpus_size: 3213835
+number_of_cpus: 48
+max_document_len: 512

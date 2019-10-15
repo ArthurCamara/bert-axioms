@@ -110,3 +110,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 *slurm-*
+notebooks/dev.processed.datapack/data.dill
+notebooks/preprocessor.mz/preprocessor.dill
+notebooks/test.processed.datapack/data.dill
+notebooks/processor.mz/preprocessor.dill
+notebooks/train.processed.datapack/data.dill

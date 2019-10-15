@@ -1,0 +1,9 @@
+{
+    "downloaded_queries/msmarco-doctrain-queries.tsv": true,
+    "_step": 3,
+    "_timestamp": 1571136872.794319,
+    "_runtime": 108.61720943450928,
+    "downloaded_qrels/msmarco-doctrain-qrels.tsv": true,
+    "downloaded_queries/msmarco-docdev-queries.tsv": true,
+    "downloaded_qrels/msmarco-docdev-qrels.tsv": true
+}

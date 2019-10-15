@@ -1,0 +1,17 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.8.12
+    is_jupyter_run: false
+    python_version: 3.7.3
+batch_size:
+  desc: Mini batch size
+  value: 32
+epochs:
+  desc: Number of epochs to train over
+  value: 3
+seed:
+  desc: null
+  value: 42

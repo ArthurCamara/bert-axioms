@@ -1,0 +1,4 @@
+{"downloaded_queries/msmarco-doctrain-queries.tsv": true, "_runtime": 69.4819872379303, "_timestamp": 1571136833.6590962, "_step": 0}
+{"downloaded_qrels/msmarco-doctrain-qrels.tsv": true, "_runtime": 87.75432062149048, "_timestamp": 1571136851.9314303, "_step": 1}
+{"downloaded_queries/msmarco-docdev-queries.tsv": true, "_runtime": 107.61607789993286, "_timestamp": 1571136871.7931871, "_step": 2}
+{"downloaded_qrels/msmarco-docdev-qrels.tsv": true, "_runtime": 108.61720943450928, "_timestamp": 1571136872.794319, "_step": 3}

@@ -1,0 +1,23 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.8.12
+    is_jupyter_run: false
+    python_version: 3.7.3
+data_home:
+  desc: Where to save data to
+  value: /ssd2/arthur/bert-axioms
+download_path:
+  desc: Default msmarco download path
+  value: https://msmarco.blob.core.windows.net/msmarcoranking/
+epochs:
+  desc: Number of epochs to train over
+  value: 3
+logging_level:
+  desc: Level for Python logger
+  value: INFO
+tokenizer_class:
+  desc: Class to be used on tokenizer
+  value: distilbert-base-uncased

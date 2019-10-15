@@ -1,0 +1,29 @@
+{
+    "root": "/ssd2/arthur/TREC2019",
+    "program": "end-to-end-training.py",
+    "git": {
+        "remote": "git+ssh://git@github.com/ArthurCamara/DeepIR-Interpretability.git",
+        "commit": "db63d12765a9cf0f33e1a56a5fc5a6601cd53d8d"
+    },
+    "email": "camara.arthur@gmail.com",
+    "startedAt": "2019-10-14T14:56:55.569898",
+    "host": "deepir.ewi.tudelft.nl",
+    "username": "arthur",
+    "executable": "/home/arthur/miniconda3/envs/bert/bin/python",
+    "os": "Linux-4.4.0-93-generic-x86_64-with-debian-stretch-sid",
+    "python": "3.7.3",
+    "gpu": "GeForce GTX 1080 Ti",
+    "gpu_count": 8,
+    "cpu_count": 56,
+    "cuda": "10.1.168",
+    "args": [
+        "--configs",
+        "my-configs.yaml"
+    ],
+    "state": "finished",
+    "jobType": null,
+    "mode": "run",
+    "project": "test-project",
+    "heartbeatAt": "2019-10-14T14:56:57.376449",
+    "exitcode": 0
+}
