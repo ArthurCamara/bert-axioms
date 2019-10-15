@@ -3,6 +3,7 @@ outputs/*
 venvs/*
 terrier-core/*
 terrier/*
+scripts/wandb/*
 .vscode/
 
 # Byte-compiled / optimized / DLL files
