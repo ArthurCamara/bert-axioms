@@ -7,7 +7,7 @@ Parameters are expected on file config-defaults.yaml. wandb deals with them.
 Multiple checkpoints will be saved through the code, to make thinks faster on future runs with similar params
 """
 import warnings
-from indri import generate_index
+from indri import generate_index, run_queries
 import logging
 from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
@@ -31,7 +31,7 @@ def main():
     tokenize_docs(config)
     generate_index(config, full=True)
     split(config)
-    # Split full_dev into dev and test
+    run_queries(config, "test", False)
     # Run Indri QL-FULL
     # Report nDCGs
     # Index short Documents on Indri

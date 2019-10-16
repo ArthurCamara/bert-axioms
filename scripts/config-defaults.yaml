@@ -36,5 +36,11 @@ indri_bin_path:
   desc: Path wihere Indri is installed
   value: "/ssd2/arthur/indri/bin"
 split_percentage:
-  desc: Percentage for tes splitting
+  desc: Percentage for test splitting
   value: .3
+metric:
+  desc: Main metric to be reported using trec_eval
+  value: "nDCG"
+indri_top_k:
+  desc: Number of documents to be retrieved by Indri to re-rank
+  value: 100
