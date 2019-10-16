@@ -103,3 +103,11 @@ def run_queries(config, split, cut):
         output = subprocess.check_output([indri_path, param_path])
         with open(run_path, 'w') as outf:
             outf.write(output.decode("utf-8"))
+    # Run trec_eval
+    qrel_path = os.path.join(config.data_home, "qrels/{}.tsv".format(split))
+    trec_eval_cmd = "{} -q -c -m {} {} {}".format(config.trec_eval_path, config.metric, qrel_path, run_path)
+    output = subprocess.check_output(trec_eval_cmd.split()).decode("utf-8")
+    final_metric = float(output.split("\n")[-2].split("\t")[-1])
+    key_name = "{}_{}_{}".format(config.metric, split, cut)
+    wandb.log({key_name: final_metric})
+    logging.info("%s, %f", key_name, final_metric)

@@ -40,7 +40,10 @@ split_percentage:
   value: .3
 metric:
   desc: Main metric to be reported using trec_eval
-  value: "nDCG"
+  value: "ndcg"
 indri_top_k:
   desc: Number of documents to be retrieved by Indri to re-rank
   value: 100
+trec_eval_path:
+  desc: Path for trec_eval
+  value: "/ssd2/arthur/trec_eval/trec_eval"
