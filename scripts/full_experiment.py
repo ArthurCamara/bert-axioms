@@ -6,15 +6,15 @@ Expected inputs are:
 Parameters are expected on file config-defaults.yaml. wandb deals with them.
 Multiple checkpoints will be saved through the code, to make thinks faster on future runs with similar params
 """
+import warnings
 from indri import generate_index
 import logging
 from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
-# from split import split
+from split import split
 # from bunch import Bunch
 # import yaml
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings("ignore")
 import wandb  # noqa
 
 
@@ -30,7 +30,7 @@ def main():
     tokenize_queries(config)
     tokenize_docs(config)
     generate_index(config, full=True)
-    # split(config)
+    split(config)
     # Split full_dev into dev and test
     # Run Indri QL-FULL
     # Report nDCGs
@@ -46,6 +46,7 @@ def main():
     # Report nDCG values for BERT
     # Create datasets
     # Run dataset check scripts for each dataset
+
 
 if __name__ == "__main__":
     # Set logger

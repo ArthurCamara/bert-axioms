@@ -372,7 +372,7 @@ def main():
 
     if len(sys.argv) < 2:
         argv = ["--cpus", "1",
-                "--axioms","TPC"]
+                "--axioms", "TPC"]
         args = parser.parse_args(argv)
     else:
         args = parser.parse_args(sys.argv[1:])

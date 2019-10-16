@@ -55,7 +55,7 @@ def process_chunk(chunk_no, block_offset, no_lines, config):
     trec_format = "<DOC>\n<DOCNO>{}</DOCNO>\n<TEXT>{}</TEXT></DOC>\n"
     partial_doc_path = os.path.join(config.data_home, "tmp", "docs-{}".format(chunk_no))
     partial_trec_path = os.path.join(config.data_home, "tmp", "trec_docs-{}".format(chunk_no))
-    with open(partial_doc_path, 'w', encoding="utf-8") as outf, open(partial_trec_path, 'w', encoding="utf-8") as outf_trec:
+    with open(partial_doc_path, 'w', encoding="utf-8") as outf, open(partial_trec_path, 'w', encoding="utf-8") as outf_trec:  # noqa E501
         for line in tqdm(lines, desc="Running for chunk {}".format(chunk_no), position=position):
             try:
                 doc_id, url, title, text = line[:-1].split("\t")
@@ -72,7 +72,7 @@ def tokenize_docs(config):
     """Tokenize docs, both tsv and TREC formats. Also generates offset file. Can take a LONG time"""
     if (os.path.isfile(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv"))
                                 and "doc_tokenizer" not in config.force_steps):  # noqa
-        logging.info("tokenized tsv file found. skipping all document tokenization process.")
+        logging.info("tokenized docs tsv file found. skipping all document tokenization process.")
         return
 
     docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tsv")

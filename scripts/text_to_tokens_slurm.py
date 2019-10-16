@@ -7,7 +7,6 @@ import csv
 import argparse
 import gzip
 import subprocess
-import logging
 from tqdm.auto import tqdm
 from pytorch_transformers import BertTokenizer
 mp.set_start_method('spawn', True)
@@ -102,7 +101,7 @@ if __name__ == "__main__":
     data_home = args.data_home
     run_file = os.path.join(args.data_home, args.run_file)
 
-    queries_file = os.path.join(data_home,"queries", f"msmarco-doc{args.split}-queries.tsv")
+    queries_file = os.path.join(data_home, "queries", f"msmarco-doc{args.split}-queries.tsv")
 
     lookup_file = os.path.join(data_home, "docs", "msmarco-docs-lookup.tsv.gz")
     if not os.path.isfile(lookup_file):

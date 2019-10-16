@@ -1,7 +1,9 @@
 import subprocess
 import os
 import logging
-import wandb
+import warnings
+warnings.filterwarnings("ignore")
+import wandb # noqa
 
 
 def generate_index(config, full=True):
