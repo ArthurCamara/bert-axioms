@@ -6,21 +6,22 @@ Expected inputs are:
 Parameters are expected on file config-defaults.yaml. wandb deals with them.
 Multiple checkpoints will be saved through the code, to make thinks faster on future runs with similar params
 """
+from indri import generate_index
+import logging
+from data_fetch import fetch_data
+from tokenization import tokenize_queries, tokenize_docs
+# from bunch import Bunch
+# import yaml
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-import wandb  # noqa E402
-import logging # noqa E402
-from data_fetch import fetch_data # noqa E402
-from tokenization import tokenize_queries, tokenize_docs # noqa E402
-from bunch import Bunch # noqa E402
-import yaml # noqa E402
+import wandb  # noqa
 
 
-# wandb.init(project="axiomatic-bert"cn)
-# config = wandb.config
+wandb.init(project="axiomatic-bert")
+config = wandb.config
 
-config = yaml.load(open("params.yaml"), Loader=yaml.FullLoader)
-config = Bunch(config)
+# config = yaml.load(open("params.yaml"), Loader=yaml.FullLoader)
+# config = Bunch(config)
 
 
 def main():
@@ -31,6 +32,7 @@ def main():
     # Tokenize docs
     tokenize_docs(config)
     # Index documents on Indri
+    generate_index(config, full=True)
     # Run Indri QL-FULL
     # Report nDCGs
     # Index short Documents on Indri

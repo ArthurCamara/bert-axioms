@@ -49,7 +49,7 @@ def process_chunk(chunk_no, block_offset, no_lines, config):
     with open(docs_path, encoding="utf-8") as f:
         f.seek(block_offset[chunk_no])
         for i in tqdm(range(no_lines), desc="Loading block for {}".format(chunk_no), position=position):
-            lines.append(f.readline().strip())
+            lines.append(f.readline())
     tokenizer = DistilBertTokenizer.from_pretrained(config.tokenizer_class)
     output_line_format = "{}\t{}\n"
     trec_format = "<DOC>\n<DOCNO>{}</DOCNO>\n<TEXT>{}</TEXT></DOC>\n"
@@ -58,8 +58,9 @@ def process_chunk(chunk_no, block_offset, no_lines, config):
     with open(partial_doc_path, 'w', encoding="utf-8") as outf, open(partial_trec_path, 'w', encoding="utf-8") as outf_trec:
         for line in tqdm(lines, desc="Running for chunk {}".format(chunk_no), position=position):
             try:
-                doc_id, url, title, text = line.split("\t")
+                doc_id, url, title, text = line[:-1].split("\t")
             except:
+                print(line)
                 continue
             full_text = " ".join([url, title, text])
             tokenized_text = ' '.join([x for x in tokenizer.tokenize(full_text)]).replace("##", "")
@@ -69,7 +70,8 @@ def process_chunk(chunk_no, block_offset, no_lines, config):
 
 def tokenize_docs(config):
     """Tokenize docs, both tsv and TREC formats. Also generates offset file. Can take a LONG time"""
-    if os.path.isfile(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv")):
+    if (os.path.isfile(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv"))
+                                and "doc_tokenizer" not in config.force_steps):  # noqa
         logging.info("tokenized tsv file found. skipping all document tokenization process.")
         return
 
@@ -120,15 +122,15 @@ def tokenize_docs(config):
         job.get()
     pool.close()
 
-    with open(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv")) as outf:
-        for i in range(config.number_of_cpus):
+    with open(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv"), 'w') as outf:
+        for i in tqdm(range(config.number_of_cpus), desc="Merging tsv file"):
             partial_path = os.path.join(config.data_home, "tmp", "docs-{}".format(i))
             for line in open(partial_path):
                 outf.write(line)
             os.remove(partial_path)
-    
-    with open(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.trec")) as outf:
-        for i in range(config.number_of_cpus):
+
+    with open(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.trec"), 'w') as outf:
+        for i in tqdm(range(config.number_of_cpus), desc="Merging TREC file"):
             partial_trec_path = os.path.join(config.data_home, "tmp", "trec_docs-{}".format(i))
             for line in open(partial_trec_path):
                 outf.write(line)

@@ -1,6 +1,3 @@
-epochs:
-  desc: Number of epochs to train over
-  value: 3
 tokenizer_class:
   desc: Class to be used on tokenizer
   value: "distilbert-base-uncased"
@@ -17,7 +14,6 @@ force_steps:
   desc: Steps to forecefully run
   value:
     -  None
-#     -  dev_query_tokenizer
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -33,3 +29,6 @@ number_of_cpus:
 max_document_len:
   desc: Maximum number of tokens to be considered in the document for the cut-down version of the dataset
   value: 512
+indri_bin_path:
+  desc: Path wihere Indri is installed
+  value: "/ssd2/arthur/indri/bin"
