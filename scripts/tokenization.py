@@ -19,7 +19,7 @@ def tokenize_queries(config):
             for line in tqdm(inf, total=config.train_queries, desc="tokenizing train queries"):
                 q_id, query = line.split("\t")
                 tokenized_query = ' '.join([x for x in tokenizer.tokenize(query)]).replace("##", "")
-                outf.write("{}\t{}".format(q_id, tokenized_query))
+                outf.write("{}\t{}\n".format(q_id, tokenized_query))
     else:
         logging.info("Already found tokenized train queries")
 
@@ -32,7 +32,7 @@ def tokenize_queries(config):
             for line in tqdm(inf, total=config.full_dev_queries, desc="Tokenizing dev queries"):
                 q_id, query = line.split("\t")
                 tokenized_query = ' '.join([x for x in tokenizer.tokenize(query)]).replace("##", "")
-                outf.write("{}\t{}".format(q_id, tokenized_query))
+                outf.write("{}\t{}\n".format(q_id, tokenized_query))
     else:
         logging.info("Already found tokenized dev queries")
 

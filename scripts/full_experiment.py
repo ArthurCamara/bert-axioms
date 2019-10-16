@@ -10,6 +10,7 @@ from indri import generate_index
 import logging
 from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
+# from split import split
 # from bunch import Bunch
 # import yaml
 import warnings
@@ -25,14 +26,12 @@ config = wandb.config
 
 
 def main():
-    # First step, fetch data
     fetch_data(config)
-    # Tokenize queries
     tokenize_queries(config)
-    # Tokenize docs
     tokenize_docs(config)
-    # Index documents on Indri
     generate_index(config, full=True)
+    # split(config)
+    # Split full_dev into dev and test
     # Run Indri QL-FULL
     # Report nDCGs
     # Index short Documents on Indri

@@ -1,3 +1,6 @@
+seed:
+  desc: Random seed
+  value: 42
 tokenizer_class:
   desc: Class to be used on tokenizer
   value: "distilbert-base-uncased"
@@ -13,7 +16,8 @@ logging_level:
 force_steps:
   desc: Steps to forecefully run
   value:
-    -  None
+    - train_query_tokenizer
+    - dev_query_tokenizer
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -32,3 +36,6 @@ max_document_len:
 indri_bin_path:
   desc: Path wihere Indri is installed
   value: "/ssd2/arthur/indri/bin"
+split_percentage:
+  desc: Percentage for tes splitting
+  value: .3

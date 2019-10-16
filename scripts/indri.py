@@ -33,6 +33,7 @@ def generate_index(config, full=True):
         param_file_format = param_file_format.format(data_dir, index_path, config.number_of_cpus)
         param_file = os.path.join(config.data_home, "indri_params/indexing_cut.param")
     if os.path.isdir(index_path) and generate_index not in config.force_steps:
+        wandb.save(os.path.join(index_path, "index/0/manfest"))
         logging.info("Index already exists. Skipping it.")
         return
     with open(param_file, 'w') as outf:
@@ -43,5 +44,4 @@ def generate_index(config, full=True):
     logging.info(cmd)
     subprocess.run(cmd.split())
     # save manifest on wandb
-    wandb.save(os.path.join(index_path, "manifest"))
     wandb.save(os.path.join(index_path, "index/0/manfest"))
