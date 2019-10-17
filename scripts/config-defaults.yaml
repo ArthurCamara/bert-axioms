@@ -16,7 +16,8 @@ logging_level:
 force_steps:
   desc: Steps to forecefully run
   value:
-    - cut_docs 
+    - run_queries
+    - cut_docs
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -47,3 +48,6 @@ indri_top_k:
 trec_eval_path:
   desc: Path for trec_eval
   value: "/ssd2/arthur/trec_eval/trec_eval"
+test_set_size:
+  desc: Size of the test dataset. 30% of the full_dev_queries, if split_percentage is .3.
+  value: 1558 

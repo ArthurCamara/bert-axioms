@@ -88,6 +88,7 @@ def run_queries(config, split, cut):
             queries_lines.append(query_param_format.format(query_id, query))
         all_queries_lines = "\n".join(queries_lines)
         indri_param_format = indri_param_format.format(config.number_of_cpus, index_path, config.indri_top_k, runID, all_queries_lines)
+        assert len(queries_lines) == config.test_set_size
         with open(param_path, 'w') as outf:
             outf.write(indri_param_format)
         logging.info("Saved params file at %s", param_path)
@@ -96,7 +97,6 @@ def run_queries(config, split, cut):
     # Actually run Indri
     if not os.path.isdir(os.path.join(config.data_home, "runs")):
         os.mkdir(os.path.join(config.data_home, "runs"))
-    
     run_path = os.path.join(config.data_home, "runs/QL_{}-{}.run".format(split, cut))
     if not os.path.isfile(run_path) or "run_queries" in config.force_steps:
         indri_path = os.path.join(config.indri_bin_path, "IndriRunQuery")
@@ -110,4 +110,4 @@ def run_queries(config, split, cut):
     final_metric = float(output.split("\n")[-2].split("\t")[-1])
     key_name = "{}_{}_{}".format(config.metric, split, cut)
     wandb.log({key_name: final_metric})
-    logging.info("%s, %f", key_name, final_metric)
+    logging.info("%s for %s-%s: %f", config.metric, split, cut, final_metric)
