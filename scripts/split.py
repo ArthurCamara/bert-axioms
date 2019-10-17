@@ -17,7 +17,7 @@ def split(config):
 
     if os.path.isfile(new_queries_dev_file) and os.path.isfile(new_queries_test_file):
         logging.info("Already found dev and test split")
-        continue
+        return
 
     # Get list of queries first
     all_queries = set()
