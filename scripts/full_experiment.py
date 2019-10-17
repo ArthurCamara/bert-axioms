@@ -12,8 +12,7 @@ import logging
 from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
 from split import split
-# from bunch import Bunch
-# import yaml
+from cut_dataset import cut_docs
 warnings.filterwarnings("ignore")
 import wandb  # noqa
 
@@ -32,8 +31,7 @@ def main():
     generate_index(config, full=True)
     split(config)
     run_queries(config, "test", False)
-    # Run Indri QL-FULL
-    # Report nDCGs
+    cut_docs(config)
     # Index short Documents on Indri
     # Run Indri-QL Cut
     # Create top 100 triples files
