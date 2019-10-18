@@ -17,7 +17,6 @@ force_steps:
   desc: Steps to forecefully run
   value:
     - run_queries
-    - cut_docs
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -32,7 +31,7 @@ number_of_cpus:
   value: 48
 max_document_len:
   desc: Maximum number of tokens to be considered in the document for the cut-down version of the dataset
-  value: 512
+  value: 500
 indri_bin_path:
   desc: Path wihere Indri is installed
   value: "/ssd2/arthur/indri/bin"

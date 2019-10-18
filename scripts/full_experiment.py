@@ -25,15 +25,15 @@ config = wandb.config
 
 
 def main():
-    fetch_data(config)
-    tokenize_queries(config)
-    tokenize_docs(config)
-    generate_index(config, full=True)
-    split(config)
-    run_queries(config, "test", False)
-    cut_docs(config)
-    # Index short Documents on Indri
-    # Run Indri-QL Cut
+    # fetch_data(config)
+    # tokenize_queries(config)
+    # tokenize_docs(config)
+    # generate_index(config, full=True)
+    # split(config)
+    # run_queries(config, "test", False)
+    # cut_docs(config)
+    # generate_index(config, full=False)
+    run_queries(config, "test", True)
     # Create top 100 triples files
     # Create negative sampling triples file
     # Fit DistilBERT
