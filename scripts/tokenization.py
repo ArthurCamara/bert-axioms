@@ -45,16 +45,16 @@ def process_chunk(chunk_no, block_offset, no_lines, config):
         position = current._identity[0] + 2
     # Load lines
     lines = []
-    docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tsv")
+    docs_path = os.path.join(config["data_home"], "docs/msmarco-docs.tsv")
     with open(docs_path, encoding="utf-8") as f:
         f.seek(block_offset[chunk_no])
         for i in tqdm(range(no_lines), desc="Loading block for {}".format(chunk_no), position=position):
             lines.append(f.readline())
-    tokenizer = DistilBertTokenizer.from_pretrained(config.tokenizer_class)
+    tokenizer = DistilBertTokenizer.from_pretrained(config["tokenizer_class"])
     output_line_format = "{}\t{}\n"
     trec_format = "<DOC>\n<DOCNO>{}</DOCNO>\n<TEXT>{}</TEXT></DOC>\n"
-    partial_doc_path = os.path.join(config.data_home, "tmp", "docs-{}".format(chunk_no))
-    partial_trec_path = os.path.join(config.data_home, "tmp", "trec_docs-{}".format(chunk_no))
+    partial_doc_path = os.path.join(config["data_home"], "tmp", "docs-{}".format(chunk_no))
+    partial_trec_path = os.path.join(config["data_home"], "tmp", "trec_docs-{}".format(chunk_no))
     with open(partial_doc_path, 'w', encoding="utf-8") as outf, open(partial_trec_path, 'w', encoding="utf-8") as outf_trec:  # noqa E501
         for line in tqdm(lines, desc="Running for chunk {}".format(chunk_no), position=position):
             try:
@@ -112,12 +112,12 @@ def tokenize_docs(config):
     def update(*a):
         pbar.update()
     if config.number_of_cpus == 1:
-        process_chunk(0, block_offset, lines_per_chunk, config)
+        process_chunk(0, block_offset, lines_per_chunk, dict(config))
         return
     pool = mp.Pool(config.number_of_cpus)
     jobs = []
     for i in range(len(block_offset)):
-        jobs.append(pool.apply_async(process_chunk, args=(i, block_offset, lines_per_chunk, config), callback=update))
+        jobs.append(pool.apply_async(process_chunk, args=(i, block_offset, lines_per_chunk, dict(config)), callback=update))
     for job in jobs:
         job.get()
     pool.close()
