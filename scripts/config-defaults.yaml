@@ -15,7 +15,7 @@ logging_level:
   value: "INFO"
 force_steps:
   desc: Steps to forecefully run
-  value: []
+  value: [train-cut-triples]
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -55,3 +55,12 @@ negative_samples:
 ignore_gpu_ids:
   desc: GPU IDs to ignore when running
   value: [0,1]
+train_batch_size:
+  desc: Size of training batch. Make sure it fits in memory!
+  value: 128
+n_epochs:
+  desc: Number of epochs to train BERT
+  value: 3
+learning_rate:
+  desc: BERT learning rate
+  value: 0.00005

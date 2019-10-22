@@ -20,16 +20,21 @@ def generate_docs_offset(doc_file, config):
     if os.path.isfile(offset_path):
         return pickle.load(open(offset_path, 'rb'))
     offset_dict = dict()
-    pbar = tqdm(total=config.corpus_size)
+    pbar = tqdm(total=config.corpus_size, desc="Generating doc offset dictionary")
     with open(doc_file) as inf:
         location = 0
         line = True
         while line:
             line = inf.readline()
-            doc_id, _ = line.split("\t")
+            try:
+                doc_id, _ = line.split("\t")
+            except:
+                continue
             offset_dict[doc_id] = location
             location = inf.tell()
             pbar.update()
+    assert len(offset_dict) == config.corpus_size
+    pickle.dump(offset_dict, open(offset_path, 'wb'))
     return offset_dict
 
 
@@ -89,11 +94,11 @@ def generate_features(config, cut, split):
             os.mkdir(os.path.join(config.data_home, "triples"))
         pickle.dump(triples, open(triples_file, 'wb'))
 
-    # load queries
+    # load queries in BERT format
     if split == "train":
-        queries_path = os.path.join(config.data_home, "queries/msmarco-doctrain-queries.tsv.tokenized")
+        queries_path = os.path.join(config.data_home, "queries/msmarco-doctrain-queries.tsv.bert")
     else:
-        queries_path = os.path.join(config.data_home, "queries/{}.tokenized.tsv".format(split))
+        queries_path = os.path.join(config.data_home, "queries/{}.tokenized.bert".format(split))
     
     assert os.path.isfile(queries_path), "Queries file not found at %s" % queries_path
     queries = dict()
@@ -103,7 +108,10 @@ def generate_features(config, cut, split):
     assert len(queries) == expected_lines
     
     # Prepare docs
-    docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert".format(cut))
+    if cut == "cut":
+        docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.bert")
+    else:
+        docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert")
     docs_offset = generate_docs_offset(docs_file, config)
 
     # Actually generate triples for training
@@ -111,7 +119,10 @@ def generate_features(config, cut, split):
         os.mkdir(os.path.join(config.data_home, "triples"))
 
     output_file = os.path.join(config.data_home, "triples/{}-{}.tsv".format(split, cut))
-    with open(output_file) as outf:
+    if os.path.isfile(output_file) and "{}-{}-triples".format(split, cut) not in config.force_steps:
+        logging.info("File %s already found. Skipping it" % output_file)
+        return
+    with open(output_file, 'w') as outf:
         for topic_id, doc_id, label in triples:
             query_text = queries[topic_id]
             doc_text = get_content(doc_id, docs_file, docs_offset)

@@ -26,29 +26,29 @@ config = wandb.config
 
 def main():
     # Fetch data if not already there
-    fetch_data(config)
+    # fetch_data(config)
 
     # tokenize queries and documents
-    tokenize_queries(config)
-    tokenize_docs(config)
+    # tokenize_queries(config)
+    # tokenize_docs(config)
 
     # Generate full document indes
-    generate_index(config, full=True)
+    # generate_index(config, full=True)
 
     # split dev-test queries
-    split(config)
+    # split(config)
 
-    run_queries(config, "test", False)
+    # run_queries(config, "test", False)
     # run_queries(config, "dev", False)
 
     # Cut documents for BERT
-    cut_docs(config)
+    # cut_docs(config)
     # Generate index with cut documents
-    generate_index(config, full=False)
+    # generate_index(config, full=False)
 
     # Run queries on cut dataset
-    run_queries(config, "test", True)
-    run_queries(config, "dev", True)
+    # run_queries(config, "test", True)
+    # run_queries(config, "dev", True)
     # run_queries(config, "train", True)
     
     # Generate features for training
