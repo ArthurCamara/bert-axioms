@@ -15,6 +15,18 @@ def get_content(doc_id, doc_file, offset_dict):
     return doc
 
 
+def truncate_seq_pair(tokens_a, tokens_b, max_length=509):
+    """Truncates a sequence pair in place to the maximum length."""
+    while True:
+        total_length = len(tokens_a) + len(tokens_b)
+        if total_length <= max_length:
+            break
+        if len(tokens_a) > len(tokens_b):
+            tokens_a.pop()
+        else:
+            tokens_b.pop()
+
+
 def generate_docs_offset(doc_file, config):
     offset_path = doc_file + ".offset"
     if os.path.isfile(offset_path):
@@ -126,4 +138,6 @@ def generate_features(config, cut, split):
         for topic_id, doc_id, label in tqdm(triples, desc="Dumping triples file"):
             query_text = queries[topic_id]
             doc_text = get_content(doc_id, docs_file, docs_offset)
-            outf.write("{}\t{}\t{}\n".format(query_text, doc_text, label))
+            truncate_seq_pair(query_text, doc_text)
+            tokens = ["[CLS]"] + query_text + ["[SEP]"] + doc_text + ["[SEP]"]
+            outf.write("{}-{}\t{}\t{}\n".format(topic_id, doc_id, tokens, label))

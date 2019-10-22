@@ -7,19 +7,19 @@ Parameters are expected on file config-defaults.yaml. wandb deals with them.
 Multiple checkpoints will be saved through the code, to make thinks faster on future runs with similar params
 """
 import warnings
-from indri import generate_index, run_queries
+import os
 import logging
+from indri import generate_index, run_queries
 from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
 from split import split
 from cut_dataset import cut_docs
-import os
 from feature_generation import generate_features
+from bert_fit import fit_bert
 warnings.filterwarnings("ignore")
+
 import wandb  # noqa
 os.environ['WANDB_MODE'] = 'dryrun'
-
-
 wandb.init(project="axiomatic-bert")
 config = wandb.config
 
@@ -55,8 +55,9 @@ def main():
     generate_features(config, "cut", "train")
     generate_features(config, "cut", "dev")
     generate_features(config, "cut", "test")
+    
     # Fit DistilBERT
-
+    fit_bert(config, "cut")
     # DONE PRE PROCESSING
 
     # Predict values for test file on BERT
