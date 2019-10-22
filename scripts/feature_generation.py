@@ -123,7 +123,7 @@ def generate_features(config, cut, split):
         logging.info("File %s already found. Skipping it" % output_file)
         return
     with open(output_file, 'w') as outf:
-        for topic_id, doc_id, label in triples:
+        for topic_id, doc_id, label in tqdm(triples, desc="Dumping triples file"):
             query_text = queries[topic_id]
             doc_text = get_content(doc_id, docs_file, docs_offset)
             outf.write("{}\t{}\t{}\n".format(query_text, doc_text, label))
