@@ -103,7 +103,7 @@ def generate_features(config, cut, split):
     assert os.path.isfile(queries_path), "Queries file not found at %s" % queries_path
     queries = dict()
     for line in open(queries_path):
-        topic_id, query = line.split("\t")
+        topic_id, query = line[:-1].split("\t")
         queries[topic_id] = query
     assert len(queries) == expected_lines
     
