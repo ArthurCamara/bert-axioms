@@ -14,7 +14,7 @@ logging_level:
   desc: Level for Python logger
   value: "INFO"
 force_steps:
-  desc: Steps to forecefully run
+  desc: Steps to forecefully run, even if the output file for the step is present
   value: []
 train_queries:
   desc: Number of train queries expected
@@ -29,7 +29,7 @@ number_of_cpus:
   desc: Number of CPUs to be used on parallel bits
   value: 48
 max_document_len:
-  desc: Maximum number of tokens to be considered in the document for the cut-down version of the dataset
+  desc: Maximum number of tokens to be considered in the document for the cut version of the dataset
   value: 500
 indri_bin_path:
   desc: Path wihere Indri is installed
@@ -58,9 +58,24 @@ ignore_gpu_ids:
 train_batch_size:
   desc: Size of training batch. Make sure it fits in memory!
   value: 128
+eval_batchsize:
+  desc: Size of DEV batch. Make sure it fits in memory!
+  value: 32
+eval_sample:
+  desc: Percentage of the dev set to use when evaluating
+  value: 0.2
 n_epochs:
   desc: Number of epochs to train BERT
   value: 3
 learning_rate:
   desc: BERT learning rate
   value: 0.00005
+gradient_accumulation_steps:
+  desc: Steps to accumulate the gradient when training
+  value: 0
+train_loss_print:
+  desc: Steps to use before logging loss
+  value: 200
+eval_step: 
+  desc: Steps to run before running an evaluate step
+  value: 400
