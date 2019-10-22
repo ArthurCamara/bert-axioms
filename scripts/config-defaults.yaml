@@ -1,8 +1,8 @@
 seed:
   desc: Random seed
   value: 42
-tokenizer_class:
-  desc: Class to be used on tokenizer
+bert_class:
+  desc: Class to be used on bert and on tokenizer
   value: "distilbert-base-uncased"
 data_home:
   desc: Where to save data to
@@ -15,8 +15,7 @@ logging_level:
   value: "INFO"
 force_steps:
   desc: Steps to forecefully run
-  value:
-    - query_train
+  value: []
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -53,3 +52,6 @@ test_set_size:
 negative_samples:
   desc: Number of negative samples for each positive sample
   value: 10
+ignore_gpu_ids:
+  desc: GPU IDs to ignore when running
+  value: [0,1]

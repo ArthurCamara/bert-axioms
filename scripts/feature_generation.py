@@ -4,6 +4,7 @@ from collections import defaultdict
 import pickle
 import logging
 from tqdm.auto import tqdm
+import subprocess
 
 
 def get_content(doc_id, doc_file, offset_dict):
@@ -33,43 +34,76 @@ def generate_docs_offset(doc_file, config):
 
 
 def generate_features(config, cut, split):
-    relevants = defaultdict(lambda: set())
-    qrel_file = os.path.join(config.data_home, "qrels/{}.tsv".format(split))
-    for line in open(qrel_file):
-        topic_id, _, doc_id, label = line.strip().split("\t")
-        if label == '1':
-            relevants[topic_id].add(doc_id)
+    random.seed(config.seed)
 
     QL_run_file = os.path.join(config.data_home, "runs/QL_{}-{}.run".format(split, cut))
-    negative_docs = defaultdict(lambda: set())
-    for line in open(QL_run_file, 'r'):
-        topic_id, _, doc_id,  _, _, _ = line.split()
-        if doc_id not in relevants[topic_id]:
-            negative_docs[topic_id].add(doc_id)
-    logging.info("Read %i positive samples", len(relevants))
+    triples_file = os.path.join(config.data_home, "triples/triples-{}-{}".format(split, cut))
+    if os.path.isfile(triples_file) and "feature_generator" not in config.force_steps:
+        triples = pickle.load(open(triples_file, 'rb'))
+        logging.info("Loaded %i triples from %s", len(triples), triples_file)
+        qrel_file = os.path.join(config.data_home, "qrels/{}.tsv".format(split))
+        if split == "train":
+            qrel_file = os.path.join(config.data_home, "qrels/msmarco-doctrain-qrels.tsv")
+        expected_lines = int(subprocess.check_output(['wc', '-l', qrel_file]).decode("utf-8").split(" ")[0])
+    else:
+        relevants = defaultdict(lambda: set())
+        qrel_file = os.path.join(config.data_home, "qrels/{}.tsv".format(split))
+        if split == "train":
+            qrel_file = os.path.join(config.data_home, "qrels/msmarco-doctrain-qrels.tsv")
+        assert os.path.isfile(qrel_file), "QRELs file not found!"
+        expected_lines = int(subprocess.check_output(['wc', '-l', qrel_file]).decode("utf-8").split(" ")[0])
+        for line in tqdm(open(qrel_file), total=expected_lines, desc="loading qrels file for {}".format(split)):
+            topic_id, _, doc_id, label = line.strip().split("\t")
+            if label == '1':
+                relevants[topic_id].add(doc_id)
+        logging.info("Read %i positive samples", len(relevants))
+        negative_docs = defaultdict(lambda: set())
+        for line in tqdm(open(QL_run_file, 'r'), total=expected_lines * config.indri_top_k, desc="loading run file for {}".format(split)):
+            topic_id, _, doc_id, _, _, _ = line.split()
+            if doc_id not in relevants[topic_id]:
+                negative_docs[topic_id].add(doc_id)
 
-    assert len(negative_docs) == len(relevants)
-    # generate negative sampling -> We are assuming only one positive per query.
-    triples = []
-    for topic_id in relevants:
-        for relevant_doc in relevants[topic_id]:  # Probably just one
-            triples.append((topic_id, relevant_doc, 1))
-            negative_samples = random.sample(negative_docs[topic_id], k=config.negative_samples)
-            for n in negative_samples:
-                triples.append((topic_id, n, 0))
-    logging.info("Final sample has %i samples", len(triples))
-    assert len(triples) == (1 + config.negative_samples) * len(relevants)
-    
+        assert len(negative_docs) == len(relevants)
+        # generate negative sampling -> We are assuming only one positive per query.
+        triples = []
+        if split != "test":
+            for topic_id in tqdm(relevants, desc="Generating triples"):
+                for relevant_doc in relevants[topic_id]:  # Probably just one
+                    triples.append((topic_id, relevant_doc, 1))
+                    negative_samples = random.sample(negative_docs[topic_id], k=config.negative_samples)
+                    for n in negative_samples:
+                        triples.append((topic_id, n, 0))
+            logging.info("Final sample has %i samples", len(triples))
+            assert len(triples) == (1 + config.negative_samples) * len(relevants)
+        # Test dataset. No negative sampling! Only the top100 needed.
+        else:
+            for line in open(QL_run_file, 'r'):
+                topic_id, _, doc_id, _, _, _ = line.split()
+                if doc_id in relevants[topic_id]:
+                    label = 1
+                else:
+                    label = 0
+                triples.append((topic_id, doc_id, label))
+                logging.info("Final sample has %i samples", len(triples))
+        if not os.path.isdir(os.path.join(config.data_home, "triples")):
+            os.mkdir(os.path.join(config.data_home, "triples"))
+        pickle.dump(triples, open(triples_file, 'wb'))
+
     # load queries
-    queries_path = os.path.join(config.data_home, "queries/{}.tokenized.tsv".format(split))
+    if split == "train":
+        queries_path = os.path.join(config.data_home, "queries/msmarco-doctrain-queries.tsv.tokenized")
+    else:
+        queries_path = os.path.join(config.data_home, "queries/{}.tokenized.tsv".format(split))
+    
+    assert os.path.isfile(queries_path), "Queries file not found at %s" % queries_path
     queries = dict()
     for line in open(queries_path):
         topic_id, query = line.split("\t")
         queries[topic_id] = query
-    assert len(queries) == len(relevants)
+    assert len(queries) == expected_lines
     
     # Prepare docs
-    docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.{}.tsv".format(cut))
+    docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert".format(cut))
     docs_offset = generate_docs_offset(docs_file, config)
 
     # Actually generate triples for training

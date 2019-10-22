@@ -13,31 +13,48 @@ from data_fetch import fetch_data
 from tokenization import tokenize_queries, tokenize_docs
 from split import split
 from cut_dataset import cut_docs
+import os
 from feature_generation import generate_features
 warnings.filterwarnings("ignore")
 import wandb  # noqa
+os.environ['WANDB_MODE'] = 'dryrun'
 
 
 wandb.init(project="axiomatic-bert")
 config = wandb.config
 
+
 def main():
+    # Fetch data if not already there
     fetch_data(config)
+
+    # tokenize queries and documents
     tokenize_queries(config)
     tokenize_docs(config)
+
+    # Generate full document indes
     generate_index(config, full=True)
+
+    # split dev-test queries
     split(config)
+
     run_queries(config, "test", False)
+    # run_queries(config, "dev", False)
+
+    # Cut documents for BERT
     cut_docs(config)
+    # Generate index with cut documents
     generate_index(config, full=False)
+
+    # Run queries on cut dataset
     run_queries(config, "test", True)
     run_queries(config, "dev", True)
-    run_queries(config, "train", True)
+    # run_queries(config, "train", True)
+    
+    # Generate features for training
     generate_features(config, "cut", "train")
     generate_features(config, "cut", "dev")
     generate_features(config, "cut", "test")
-    # Create top 100 triples files
-    # Create negative sampling triples file
     # Fit DistilBERT
 
     # DONE PRE PROCESSING

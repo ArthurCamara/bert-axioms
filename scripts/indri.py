@@ -108,7 +108,7 @@ def run_queries(config, split, cut):
     run_path = os.path.join(config.data_home, "runs/QL_{}-{}.run".format(split, cut))
     if not os.path.isfile(run_path) or "query_{}".format(split) in config.force_steps:
         indri_path = os.path.join(config.indri_bin_path, "IndriRunQuery")
-        logging.info("Running Indri process with command %s %s".format(indri_path, param_path))
+        logging.info("Running Indri process with command %s %s", indri_path, param_path)
         output = subprocess.check_output([indri_path, param_path])
         with open(run_path, 'w') as outf:
             outf.write(output.decode("utf-8"))
@@ -119,7 +119,7 @@ def run_queries(config, split, cut):
     else:
         qrel_path = os.path.join(config.data_home, "qrels/{}.tsv".format(split))
     trec_eval_cmd = "{} -q -c -m {} {} {}".format(config.trec_eval_path, config.metric, qrel_path, run_path)
-    logging.info("Running trec_eval with command: %s".format(trec_eval_cmd))
+    logging.info("Running trec_eval with command: %s", trec_eval_cmd)
     output = subprocess.check_output(trec_eval_cmd.split()).decode("utf-8")
     final_metric = float(output.split("\n")[-2].split("\t")[-1])
     key_name = "{}_{}_{}".format(config.metric, split, cut)
