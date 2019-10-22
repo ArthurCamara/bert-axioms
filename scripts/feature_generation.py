@@ -89,7 +89,7 @@ def generate_features(config, cut, split):
                 else:
                     label = 0
                 triples.append((topic_id, doc_id, label))
-                logging.info("Final sample has %i samples", len(triples))
+            logging.info("Final sample has %i samples", len(triples))
         if not os.path.isdir(os.path.join(config.data_home, "triples")):
             os.mkdir(os.path.join(config.data_home, "triples"))
         pickle.dump(triples, open(triples_file, 'wb'))
