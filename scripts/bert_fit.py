@@ -38,8 +38,10 @@ def fit_bert(config, cut):
     # Set dataset
     train_triples_path = os.path.join(config.data_home, "triples/train-{}.tsv".format(cut))
     dev_triples_path = os.path.join(config.data_home, "triples/dev-{}.tsv".format(cut))
-    train_dataset = MsMarcoDataset(train_triples_path, config.data_home, distil=True, invert_label=True)
-    dev_dataset = MsMarcoDataset(dev_triples_path, config.data_home, distil=True, invert_label=True)
+    size = 11 * config.train_queries
+    train_dataset = MsMarcoDataset(train_triples_path, config.data_home, invert_label=True, size=size)
+    size = 11 * (config.full_dev_queries - config.test_set_size)
+    dev_dataset = MsMarcoDataset(dev_triples_path, config.data_home, distil=True, invert_label=True, size=size)
     
     # Set random seeds
     random.seed(config.seed)

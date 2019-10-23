@@ -1,7 +1,7 @@
 import os
 import torch
-from torch.utils.data import Dataset, DataLoader
-from pytorch_transformers import BertTokenizer, DistilBertTokenizer
+from torch.utils.data import Dataset
+from pytorch_transformers import DistilBertTokenizer
 from tqdm.auto import tqdm
 import logging
 import pickle
@@ -17,10 +17,7 @@ class MsMarcoDataset(Dataset):
             max_seq_len=512,
             labeled=True,
             size=None,
-            transform=None,
             invert_label=True,
-            xlnet=False,
-            distil=False, 
             force=False):
         """
         Args:
@@ -28,27 +25,14 @@ class MsMarcoDataset(Dataset):
                 "qid-did    bert-formatted-tokens   label"
             data_dir (string): Directory with the rest of the data, where we can write to
             size (int, optional): Number of lines to process. If None, will run wc -l first.
-            transform (callable, optional): Transformations to be performed on the data
             invert_label: Must be True if you are planning to use BertForNextSentencePrediction
-            distil: Use distlBERT?
             force: Force to re-compute offset dicts and size
         """
         logging.info("Loading dataset from %s", tsv_file)
         self.tsv_path = tsv_file
         self.data_dir = data_dir
-        self.transform = transform
         self.max_seq_len = max_seq_len
-        self.xlnet = xlnet
-        self.distil = distil
         self.labeled = labeled
-        if tsv_file.endswith("train-triples.top100"):
-            size = 361276621
-        elif tsv_file.endswith("train-triples.10neg"):
-            size = 2935878
-        # if tsv_file.endswith("cut-train.10neg"):
-            # size = 4037132
-        # elif tsv_file.endswith("cut-dev.10neg"):
-            # size = 39974
         if size is None or force:
             with open(tsv_file, encoding="utf-8", errors="ignore") as f:
                 for i, _ in tqdm(enumerate(f), desc="Counting lines on file..."):
@@ -58,12 +42,7 @@ class MsMarcoDataset(Dataset):
             self.size = size
 
         self.offset_dict, self.index_dict = self.load_offset_dict(force)
-        assert os.path.isdir(os.path.join(self.data_dir, "models"))
-        if distil:
-            self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-        else:
-            self.tokenizer = BertTokenizer.from_pretrained(
-                os.path.join(self.data_dir, "models"))
+        self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
         if invert_label:
             self.label_map = {label: i for i, label in enumerate(["1", "0"])}
         else:
@@ -166,9 +145,9 @@ class MsMarcoDataset(Dataset):
                 torch.tensor(segment_ids, dtype=torch.long))
 
 
-if __name__ == "__main__":
-    dataset = MsMarcoDataset(
-        "/ssd2/arthur/TREC2019/data/triples-tokenized/cut-test.top100", "/ssd2/arthur/TREC2019/data", force=True, labeled=True)
-    dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
-    for index, batch in tqdm(enumerate(dataloader), desc="{} Dataset".format(dataset), total=len(dataloader)):
-        pass
+# if __name__ == "__main__":
+#     dataset = MsMarcoDataset(
+#         "/ssd2/arthur/TREC2019/data/triples-tokenized/cut-test.top100", "/ssd2/arthur/TREC2019/data", force=True, labeled=True)
+#     dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
+#     for index, batch in tqdm(enumerate(dataloader), desc="{} Dataset".format(dataset), total=len(dataloader)):
+#         pass

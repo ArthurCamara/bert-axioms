@@ -52,9 +52,9 @@ def main():
     # run_queries(config, "train", True)
     
     # Generate features for training
-    generate_features(config, "cut", "train")
-    generate_features(config, "cut", "dev")
-    generate_features(config, "cut", "test")
+    # generate_features(config, "cut", "train")
+    # generate_features(config, "cut", "dev")
+    # generate_features(config, "cut", "test")
     
     # Fit DistilBERT
     fit_bert(config, "cut")
