@@ -1,10 +1,13 @@
 import os
 import torch
 from torch.utils.data import Dataset
-from pytorch_transformers import DistilBertTokenizer
+from transformers import DistilBertTokenizer
 from tqdm.auto import tqdm
 import logging
 import pickle
+import multiprocessing
+multiprocessing.set_start_method('spawn', True)
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 
 class MsMarcoDataset(Dataset):

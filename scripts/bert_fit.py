@@ -10,6 +10,7 @@ import torch
 import math
 import logging
 import wandb
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 
 def init_optimizer(
@@ -34,14 +35,16 @@ def init_optimizer(
 
 
 def fit_bert(config, cut):
-
+    if "fit_model-{}".format(cut) not in config.force_steps:
+        logging.info("Skipping model fit for %s", cut)
+        return
     # Set dataset
     train_triples_path = os.path.join(config.data_home, "triples/train-{}.tsv".format(cut))
     dev_triples_path = os.path.join(config.data_home, "triples/dev-{}.tsv".format(cut))
     size = 11 * config.train_queries
     train_dataset = MsMarcoDataset(train_triples_path, config.data_home, invert_label=True, size=size)
     size = 11 * (config.full_dev_queries - config.test_set_size)
-    dev_dataset = MsMarcoDataset(dev_triples_path, config.data_home, distil=True, invert_label=True, size=size)
+    dev_dataset = MsMarcoDataset(dev_triples_path, config.data_home, invert_label=True, size=size)
     
     # Set random seeds
     random.seed(config.seed)
@@ -49,24 +52,29 @@ def fit_bert(config, cut):
     torch.manual_seed(config.seed)
 
     # Set CUDA
+    model = DistilBertForSequenceClassification.from_pretrained(config.bert_class)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(config.seed)
         visible_gpus = list(range(torch.cuda.device_count()))
         for _id in config.ignore_gpu_ids:
             visible_gpus.remove(_id)
-        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(x) for x in visible_gpus)
         logging.info("Running with gpus {}".format(visible_gpus))
+        device = torch.device("cuda:{}".format(visible_gpus[0]))
+        model = torch.nn.DataParallel(model, device_ids=visible_gpus)
+        model.to(device)
+        train_batch_size = len(visible_gpus) * config.batch_per_device
+        logging.info("Effective train batch size of %d", train_batch_size)
     else:
         device = torch.device("cpu")
+        model.to(device)
     logging.info("Using device: %s", str(device))
-    model = DistilBertForSequenceClassification.from_pretrained(config.bert_class)
-    model.to(device)
     wandb.watch(model)
+    
     data_loader = DataLoader(
         train_dataset,
-        batch_size=config.train_batch_size,
-        shuffle=True,
-        num_workers=config.number_of_cpus)
+        batch_size=train_batch_size,
+        num_workers=config.number_of_cpus,
+        shuffle=True)
     num_train_optimization_steps = len(data_loader) * config.n_epochs
     optimizer, scheduler = init_optimizer(model, num_train_optimization_steps, config.learning_rate)
     logging.info("******Started trainning******")
@@ -78,7 +86,10 @@ def fit_bert(config, cut):
     for _ in tqdm(range(config.n_epochs), desc="Epochs"):
         for step, batch in tqdm(enumerate(data_loader), desc="Batches", total=len(data_loader)):
             model.train()
-            inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3]}
+            inputs = {
+                'input_ids': batch[0].to(device),
+                'attention_mask': batch[1].to(device),
+                'labels': batch[3].to(device)}
             outputs = model(**inputs)
             loss = outputs[0]
             loss = loss.mean()
@@ -89,21 +100,19 @@ def fit_bert(config, cut):
             tr_loss += loss.item()
 
             if (step + 1) % config.gradient_accumulation_steps == 0:
-                optimizer.setp()
+                optimizer.step()
                 scheduler.step()
                 model.zero_grad()
                 wandb.log({
                     "Train Loss": (tr_loss - logging_loss) / config.train_loss_print,
                     "Leaning Rate": scheduler.get_lr()[0]}, step=global_step)
+                    
             global_step += 1
             if global_step % config.train_loss_print == 0:
                 logits = outputs[1]
                 preds = logits.detach().cpu().numpy()
                 preds = np.argmax(preds, axis=1)
                 out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
-                wandb.log({
-                    "Train Accuracy": accuracy_score(out_label_ids, preds)
-                }, step=global_step)
                 logging.info("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
                 logging.info("Training loss: {}".format(
@@ -124,8 +133,15 @@ def fit_bert(config, cut):
                 logging.info("Saving model checkpoint to %s", output_dir)
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
-                model.save_pretrained(output_dir)
+                model_to_save = model.module if hasattr(model, 'module') else model
+                model_to_save.save_pretrained(output_dir)
                 wandb.save(output_dir)
+    output_dir = os.path.join(config.data_home, "models/{}-{}".format(config.bert_class, cut))
+    if not os.path.isfile(output_dir):
+        os.makedirs(output_dir)
+    model_to_save = model.module if hasattr(model, 'module') else model
+    model_to_save.save_pretrained(output_dir)
+    return model
 
 
 def evaluate(eval_dataset: MsMarcoDataset,
@@ -136,7 +152,6 @@ def evaluate(eval_dataset: MsMarcoDataset,
              eval_batchsize=32,
              n_workers=0,
              sample=1.0):
-    results = {}
     starting_index = 0
     max_feasible_index = len(eval_dataset) - math.floor(len(eval_dataset) * sample)
     if max_feasible_index > 0:
@@ -166,6 +181,8 @@ def evaluate(eval_dataset: MsMarcoDataset,
                 preds = np.append(preds, batch_predictions, axis=0)
                 out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy().flatten(), axis=0)
         eval_loss = eval_loss / nb_eval_steps
+    results = {}
+    preds = np.argmax(preds, axis=1)
     results["Acuracy Dev"] = accuracy_score(out_label_ids, preds)
     results["F1 Dev"] = f1_score(out_label_ids, preds)
     results["AP Dev"] = average_precision_score(out_label_ids, preds)

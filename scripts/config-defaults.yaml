@@ -15,7 +15,7 @@ logging_level:
   value: "INFO"
 force_steps:
   desc: Steps to forecefully run, even if the output file for the step is present
-  value: []
+  value: [fit_model-cut]
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -27,7 +27,7 @@ corpus_size:
   value: 3213835
 number_of_cpus:
   desc: Number of CPUs to be used on parallel bits
-  value: 48
+  value: 48 # CHANGE THIS 
 max_document_len:
   desc: Maximum number of tokens to be considered in the document for the cut version of the dataset
   value: 500
@@ -54,10 +54,11 @@ negative_samples:
   value: 10
 ignore_gpu_ids:
   desc: GPU IDs to ignore when running
-  value: [0,1]
-train_batch_size:
-  desc: Size of training batch. Make sure it fits in memory!
-  value: 128
+  value: [0, 1, 3, 4]
+batch_per_device:
+  desc: "Size of training batch for each GPU. Must be enough to fit in ONE GPU only.
+  Final batch_size is num_gpus*this. Each sample, with max_len=512, takes about 522MB."
+  value: 20
 eval_batchsize:
   desc: Size of DEV batch. Make sure it fits in memory!
   value: 32
@@ -72,10 +73,10 @@ learning_rate:
   value: 0.00005
 gradient_accumulation_steps:
   desc: Steps to accumulate the gradient when training
-  value: 0
+  value: 1 
 train_loss_print:
   desc: Steps to use before logging loss
-  value: 200
-eval_step: 
+  value: 200  # CHANGE THIS 
+eval_steps: 
   desc: Steps to run before running an evaluate step
-  value: 400
+  value: 400  # CHANGE THIS 
