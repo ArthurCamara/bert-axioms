@@ -15,6 +15,7 @@ from split import split
 from cut_dataset import cut_docs
 from feature_generation import generate_features
 from bert_fit import fit_bert
+import torch
 warnings.filterwarnings("ignore")
 
 import wandb  # noqa
@@ -41,16 +42,16 @@ def main():
     split(config)
     run_queries(config, "test", False)
     run_queries(config, "dev", False)
-    run_queries(config, "train", False)
+    # run_queries(config, "train", False) #This is broken.
 
     run_queries(config, "test", True)
     run_queries(config, "dev", True)
-    run_queries(config, "train", True)
+    # run_queries(config, "train", True)
     
     # Generate features for training
-    generate_features(config, "cut", "train")
-    generate_features(config, "cut", "dev")
-    generate_features(config, "cut", "test")
+    # generate_features(config, "cut", "train")
+    # generate_features(config, "cut", "dev")
+    # generate_features(config, "cut", "test")
     
     # Fit DistilBERT
     _ = fit_bert(config, "cut")
@@ -64,7 +65,7 @@ def main():
 
 if __name__ == "__main__":
     # Set logger
-    # multiprocessing.set_start_method('spawn',  force=True)
+    # torch.multiprocessing.set_start_method('fork', force=True)
     level = logging.getLevelName(config.logging_level)
     Log = logging.getLogger()
     Log.setLevel(level)

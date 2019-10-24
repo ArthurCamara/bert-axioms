@@ -3,13 +3,14 @@ from transformers import DistilBertForSequenceClassification, AdamW, WarmupLinea
 import numpy as np
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
-from sklearn.metrics import f1_score, average_precision_score, accuracy_score
+from sklearn.metrics import f1_score, average_precision_score, accuracy_score, roc_auc_score
 import os
 import random
 import torch
 import math
 import logging
 import wandb
+torch.multiprocessing.set_start_method('fork', force=True)
 logging.getLogger("transformers").setLevel(logging.WARNING)
 
 
@@ -104,8 +105,8 @@ def fit_bert(config, cut):
                 scheduler.step()
                 model.zero_grad()
                 wandb.log({
-                    "Train Loss": (tr_loss - logging_loss) / config.train_loss_print,
-                    "Leaning Rate": scheduler.get_lr()[0]}, step=global_step)
+                    "Train Loss": loss.item(),
+                    "Leaning Rate": scheduler.get_lr()[0]})
                     
             global_step += 1
             if global_step % config.train_loss_print == 0:
@@ -116,7 +117,7 @@ def fit_bert(config, cut):
                 logging.info("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
                 logging.info("Training loss: {}".format(
-                    (tr_loss - logging_loss) / config.train_loss_print))
+                    loss.item()))
                 logging_loss = tr_loss
             
             if global_step % config.eval_steps == 0:
@@ -135,7 +136,6 @@ def fit_bert(config, cut):
                     os.makedirs(output_dir)
                 model_to_save = model.module if hasattr(model, 'module') else model
                 model_to_save.save_pretrained(output_dir)
-                wandb.save(output_dir)
     output_dir = os.path.join(config.data_home, "models/{}-{}".format(config.bert_class, cut))
     if not os.path.isfile(output_dir):
         os.makedirs(output_dir)
@@ -182,12 +182,13 @@ def evaluate(eval_dataset: MsMarcoDataset,
                 out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy().flatten(), axis=0)
         eval_loss = eval_loss / nb_eval_steps
     results = {}
+    results["ROC Dev"] = roc_auc_score(out_label_ids, preds[:, 1])
     preds = np.argmax(preds, axis=1)
     results["Acuracy Dev"] = accuracy_score(out_label_ids, preds)
     results["F1 Dev"] = f1_score(out_label_ids, preds)
     results["AP Dev"] = average_precision_score(out_label_ids, preds)
     logging.info("***** Eval results *****")
-    wandb.log(results, step=global_step)
+    wandb.log(results)
     for key in sorted(results.keys()):
         logging.info("  %s = %s", key, str(results[key]))
 

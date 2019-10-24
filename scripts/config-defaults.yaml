@@ -58,7 +58,7 @@ ignore_gpu_ids:
 batch_per_device:
   desc: "Size of training batch for each GPU. Must be enough to fit in ONE GPU only.
   Final batch_size is num_gpus*this. Each sample, with max_len=512, takes about 522MB."
-  value: 20
+  value: 16
 eval_batchsize:
   desc: Size of DEV batch. Make sure it fits in memory!
   value: 32
