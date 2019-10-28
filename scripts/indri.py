@@ -101,7 +101,7 @@ def run_queries(config, split, cut):
     else:
         logging.info("Already found file %s. Not recreating it", param_path)
     # Actually run Indri
-    wandb.save(param_path)
+    # wandb.save(param_path)
     if not os.path.isdir(os.path.join(config.data_home, "runs")):
         os.mkdir(os.path.join(config.data_home, "runs"))
         logging.info("Creating runs folder at %s", os.path.join(config.data_home, "runs"))
@@ -123,5 +123,5 @@ def run_queries(config, split, cut):
     output = subprocess.check_output(trec_eval_cmd.split()).decode("utf-8")
     final_metric = float(output.split("\n")[-2].split("\t")[-1])
     key_name = "{}_{}_{}".format(config.metric, split, cut)
-    wandb.log({key_name: final_metric})
+    wandb.run.summary[key_name] = final_metric
     logging.info("%s for %s-%s: %f", config.metric, split, cut, final_metric)

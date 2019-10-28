@@ -11,6 +11,8 @@ import multiprocessing as mp
 import numpy as np
 from scipy.spatial.distance import cosine
 from multiprocessing import Manager
+import wandb
+import logging
 # mp.set_start_method("spawn", True)
 
 
@@ -354,6 +356,46 @@ def STMC3(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
             elif len(dj_clean) > len(di_clean) and di_query_sim > dj_query_sim:
                 instances.append((topic_id, dj_id, di_id))
     return instances
+
+
+def extract_datasets(cut):
+    config = wandb.config
+    axioms = config.axioms
+    if cut == 'cut':
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.bert")
+    else:
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert")
+    offset_dict = pickle.load(open(docs_path + ".offset", 'rb'))
+    top_100_path = os.path.join(config.data_home, "runs/QL_test-{}.run".format(cut))
+    assert os.path.isfile(top_100_path), "could not find run file at %s" % top_100_path
+    assert os.path.isfile(docs_path), "could not find docs file at %s" % docs_path
+    
+    tuples = defaultdict(lambda: set())
+    all_docs = dict()
+    docs_lens = dict()
+    size = 100 * config.test_set_size
+    for i in tqdm(open(top_100_path), total=size, desc="loading docs and queries"):
+        topic_id, _, doc_id, _, score, _ = i.split()
+        tuples[topic_id].add(doc_id)
+        if doc_id in all_docs:
+            continue
+        all_docs[doc_id] = getcontent(doc_id, docs_path, offset_dict).split()
+        docs_lens[doc_id] = len(all_docs[doc_id])
+    tuples = dict(tuples)
+    queries_file = os.path.join(config.data_home, "runs/test.tokenized.bert")
+    assert os.path.isfile(queries_file), "could not find queries file at %s" % queries_file
+    diagnostics_path = os.path.join(config.data_home, "diagnostics")
+    if not os.path.isdir(diagnostics_path):
+        os.mkdir(diagnostics_path)
+    all_lines = [(x.split("\t")[0], eval(x.split("\t")[1])) for x in open(queries_file).readlines()]
+
+    scores = {}
+    for line in open(top_100_path):
+        topic_id, _, doc_id, _, score, _ = line.split(" ")
+        scores["{}-{}".format(topic_id, doc_id)] = float(score)
+    config.qrels = scores
+    for axiom in axioms:
+        logging.info("Running axiom %s", axiom)
 
 
 def main():

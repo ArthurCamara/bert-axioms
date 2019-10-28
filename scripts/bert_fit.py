@@ -112,13 +112,13 @@ def fit_bert(config, cut):
             if global_step % config.train_loss_print == 0:
                 logits = outputs[1]
                 preds = logits.detach().cpu().numpy()
+                logging.info("Train ROC: {}".format(roc_auc_score(out_label_ids, preds[:, 1])))
                 preds = np.argmax(preds, axis=1)
                 out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
                 logging.info("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
                 logging.info("Training loss: {}".format(
                     loss.item()))
-                logging_loss = tr_loss
             
             if global_step % config.eval_steps == 0:
                 evaluate(dev_dataset,
@@ -137,8 +137,11 @@ def fit_bert(config, cut):
                 model_to_save = model.module if hasattr(model, 'module') else model
                 model_to_save.save_pretrained(output_dir)
     output_dir = os.path.join(config.data_home, "models/{}-{}".format(config.bert_class, cut))
-    if not os.path.isfile(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.isfile(os.path.join(config.data_home, "models")):
+        os.makedirs(os.path.join(config.data_home, "models"))
+    # Force overwrite.
+    if os.path.isdir(output_dir):
+        os.rmdir(output_dir)
     model_to_save = model.module if hasattr(model, 'module') else model
     model_to_save.save_pretrained(output_dir)
     return model
@@ -191,4 +194,3 @@ def evaluate(eval_dataset: MsMarcoDataset,
     wandb.log(results)
     for key in sorted(results.keys()):
         logging.info("  %s = %s", key, str(results[key]))
-
