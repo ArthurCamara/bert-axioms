@@ -79,10 +79,10 @@ train_loss_print:
   value: 200  # CHANGE THIS 
 eval_steps: 
   desc: Steps to run before running an evaluate step
-  value: 400  # CHANGE THIS 
+  value: 400  # CHANGE THIS
 axioms:
   desc: List of axioms to run
-  value: [TFC1]
+  value: [TFC2]
 delta:
   desc: Delta for TFC1 and TFC2
   value: 10
