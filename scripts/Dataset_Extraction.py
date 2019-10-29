@@ -10,9 +10,12 @@ from gensim.models import KeyedVectors
 import multiprocessing as mp
 import numpy as np
 from scipy.spatial.distance import cosine
-from multiprocessing import Manager
+from multiprocessing import Manager, current_process
 import wandb
 import logging
+from itertools import repeat
+from compute_IDF_on_whole_corpus import compute_IDFS
+
 # mp.set_start_method("spawn", True)
 
 
@@ -20,16 +23,22 @@ def getcontent(doc_id, docs_file, offset_dict):
     offset = offset_dict[doc_id]
     with open(docs_file) as f:
         f.seek(offset)
-        doc = f.readline()
-    return doc
+        doc_id, doc = f.readline().split("\t")
+    return eval(doc)
 
 
-def TFC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
-    query = ' '.join([x for x in tokenized_query]).replace("##", "")
-    query_terms = set(query.split())
+def TFC1(sample, all_docs, tuples, docs_lens, args, scores):
+    topic_id, query_terms = sample
+    query_terms = set(query_terms)
     instances = []
     docs_skipped = set()
-    for counter, di_id in tqdm(enumerate(tuples[topic_id])):
+    current = current_process()
+    try:
+        position = current._identity[0] - 1
+    except:
+        position = None
+    # return
+    for di_id in tqdm(tuples[topic_id], position=position, total=100):
         if di_id in docs_skipped:
             continue
         di_text = [w for w in all_docs[di_id] if w in query_terms]
@@ -40,7 +49,7 @@ def TFC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
         for dj_id in tuples[topic_id]:
             if di_id == dj_id or dj_id in docs_skipped:
                 continue
-            if abs(docs_lens[di_id] - docs_lens[dj_id]) > args.delta:
+            if abs(docs_lens[di_id] - docs_lens[dj_id]) > args["delta"]:
                 continue
             dj_text = [w for w in all_docs[dj_id] if w in query_terms]
             if len(dj_text) == 0:
@@ -53,16 +62,17 @@ def TFC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
             if sum([di_terms_counter[w] < dj_terms_counter[w] for w in query_terms]) > 0:
                 continue
             instances.append((topic_id, di_id, dj_id))
-
+    # output_folder = os.path.join(os.path.join(args["data_home"], "tmp/TFC1_{}".format(topic_id)))
+    # pickle.dump(instances, open(output_folder, 'wb'))
     return instances
 
 
-def TFC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
-    query = ' '.join([x for x in tokenized_query]).replace("##", "")
-    query_terms = set(query.split())
+def TFC2(sample, all_docs, tuples, docs_lens, args, qrels):
+    topic_id, query_terms = sample
+    query_terms = set(query_terms)
     instances = []
     fullfils = 0
-    for di_id in tuples[topic_id]:
+    for di_id in tqdm(tuples[topic_id]):
         di_text = [w for w in all_docs[di_id] if w in query_terms]
         if len(di_text) == 0:
             continue
@@ -71,7 +81,7 @@ def TFC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
         for dj_id in tuples[topic_id]:
             if dj_id == di_id:
                 continue
-            if abs(docs_lens[di_id] - docs_lens[dj_id]) > args.delta:
+            if abs(docs_lens[di_id] - docs_lens[dj_id]) > args["delta"]:
                 continue
             dj_text = [w for w in all_docs[dj_id] if w in query_terms]
             if len(dj_text) == 0:
@@ -81,8 +91,8 @@ def TFC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
             for dk_id in tuples[topic_id]:
                 if dk_id == di_id or dk_id == dj_id:
                     continue
-                if (abs(docs_lens[dk_id] - docs_lens[dj_id]) > args.delta
-                   or abs(docs_lens[dk_id] - docs_lens[di_id]) > args.delta):  # noqa: W503
+                if (abs(docs_lens[dk_id] - docs_lens[dj_id]) > args["delta"]
+                   or abs(docs_lens[dk_id] - docs_lens[di_id]) > args["delta"]):  # noqa: W503
                     continue
                 dk_text = [w for w in all_docs[dk_id] if w in query_terms]
                 if len(dk_text) == 0:
@@ -99,17 +109,19 @@ def TFC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
                 if flag:
                     continue
                 instances.append((topic_id, di_id, dj_id, dk_id))
-                di_score = args.qrels["{}-{}".format(topic_id, di_id)]
-                dj_score = args.qrels["{}-{}".format(topic_id, dj_id)]
-                dk_score = args.qrels["{}-{}".format(topic_id, dk_id)]
+                di_score = qrels["{}-{}".format(topic_id, di_id)]
+                dj_score = qrels["{}-{}".format(topic_id, dj_id)]
+                dk_score = qrels["{}-{}".format(topic_id, dk_id)]
                 if dj_score - di_score > dk_score - dj_score:
                     fullfils += 1
+    if len(instances) == 0:
+        print("No instances. WTF?")
     if len(instances) != 0:
         print(len(instances), fullfils / len(instances))
     return instances
 
 
-def MTDC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def MTDC(sample, all_docs, tuples, docs_lens, args, qrels):
     IDFS = pickle.load(open(os.path.join(args.data_home, args.idf_file), 'rb'))
     query = [x.replace("##", "") for x in tokenized_query]
     query_terms = set(query)
@@ -163,7 +175,7 @@ def MTDC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
     return instances
 
 
-def LNC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def LNC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     query = ' '.join([x for x in tokenized_query]).replace("##", "")
     query = [x.replace("##", "") for x in tokenized_query]
     query_terms = set(query)
@@ -193,7 +205,7 @@ def LNC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
     return instances
 
 
-def TPC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def TPC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     query = ' '.join([x for x in tokenized_query]).replace("##", "")
     query = [x.replace("##", "") for x in tokenized_query]
     query_terms = set(query)
@@ -235,7 +247,7 @@ def TPC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
     return instances
 
 
-def STMC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def STMC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     '''
     Let Q = {q} be a query with only one term q. -> Relaxation - Multiple terms
     Let D1 = {d1} and D2 = {d2} be two single-term documents, where q != d1 and q != d2.
@@ -278,7 +290,7 @@ def STMC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
     return instances
 
 
-def STMC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def STMC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     '''
     Let Q = {q} be a single term query -> Multiple terms
     and d be a non-query term such that s(q, d) > 0.
@@ -320,7 +332,7 @@ def STMC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
     return instances
 
 
-def STMC3(topic_id, tokenized_query, all_docs, tuples, docs_lens, args):
+def STMC3(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     '''
     conditions: D1 and D2 covers the same number of query terms
     D1 and D2 are approx. the same size
@@ -374,28 +386,75 @@ def extract_datasets(cut):
     all_docs = dict()
     docs_lens = dict()
     size = 100 * config.test_set_size
-    for i in tqdm(open(top_100_path), total=size, desc="loading docs and queries"):
-        topic_id, _, doc_id, _, score, _ = i.split()
-        tuples[topic_id].add(doc_id)
-        if doc_id in all_docs:
-            continue
-        all_docs[doc_id] = getcontent(doc_id, docs_path, offset_dict).split()
-        docs_lens[doc_id] = len(all_docs[doc_id])
-    tuples = dict(tuples)
-    queries_file = os.path.join(config.data_home, "runs/test.tokenized.bert")
+    all_docs_p = os.path.join(config.data_home, "tmp", "all_docs.pkl")
+    docs_lens_p = os.path.join(config.data_home, "tmp", "docs_lens.pkl")
+    tuples_p = os.path.join(config.data_home, "tmp", "tuples.pkl")
+    if os.path.isfile(all_docs_p) and os.path.isfile(docs_lens_p) and os.path.isfile(tuples_p):
+        all_docs = pickle.load(open(all_docs_p, 'rb'))
+        docs_lens = pickle.load(open(docs_lens_p, 'rb'))
+        tuples = pickle.load(open(tuples_p, 'rb'))
+    else:
+        for i in tqdm(open(top_100_path), total=size, desc="loading unique docs"):
+            topic_id, _, doc_id, _, score, _ = i.split()
+            tuples[topic_id].add(doc_id)
+            if doc_id in all_docs:
+                continue
+            all_docs[doc_id] = getcontent(doc_id, docs_path, offset_dict)
+            docs_lens[doc_id] = len(all_docs[doc_id])
+        tuples = dict(tuples)
+        pickle.dump(all_docs, open(all_docs_p, 'wb'))
+        pickle.dump(docs_lens, open(docs_lens_p, 'wb'))
+        pickle.dump(tuples, open(tuples_p, 'wb'))
+    queries_file = os.path.join(config.data_home, "queries/test.tokenized.bert")
     assert os.path.isfile(queries_file), "could not find queries file at %s" % queries_file
     diagnostics_path = os.path.join(config.data_home, "diagnostics")
     if not os.path.isdir(diagnostics_path):
         os.mkdir(diagnostics_path)
     all_lines = [(x.split("\t")[0], eval(x.split("\t")[1])) for x in open(queries_file).readlines()]
-
     scores = {}
     for line in open(top_100_path):
         topic_id, _, doc_id, _, score, _ = line.split(" ")
         scores["{}-{}".format(topic_id, doc_id)] = float(score)
-    config.qrels = scores
     for axiom in axioms:
-        logging.info("Running axiom %s", axiom)
+        if axiom == "MTDC":  # We need IDFs!
+            IDF_folder = os.path.join(config.data_home, "docs/IDFS/IDFS-FULL")
+            if not os.path.isfile(IDF_folder):
+                # Generate IDFs
+                compute_IDFS(IDF_folder.replace("/IDFS-FULL", ""), cut)
+            return
+        if axiom in ["TFC1", "TFC2"]:  # These axioms are too fast to be ran in paralel. Just do it in serial. Faster.
+            cpus = 0
+        else:
+            cpus = config.number_of_cpus
+        logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, config.number_of_cpus, len(all_lines)))
+        if cpus > 1:
+            pool = mp.Pool(config.number_of_cpus)
+            jobs = []
+            pbar = tqdm(total=len(all_lines))
+            # manager = Manager()
+            # all_docs = manager.dict(all_docs)
+            # docs_lens = manager.dict(docs_lens)
+            # scores = manager.dict(scores)
+            # args = manager.dict(dict(config))
+            args = dict(config)
+            instances = []
+
+            def update(*a):
+                pbar.update()
+            f = globals()[axiom]
+            jobs = []
+            for i in all_lines:
+                jobs.append(pool.apply_async(f, args=(i, all_docs, tuples, docs_lens, args, scores), callback=update))
+            for job in jobs:
+                job.get()
+            pool.close()
+            pbar.close()
+        else:
+            instances = []
+            for sample in tqdm(all_lines, desc="Processing {}".format(axiom)):
+                instances.append(globals()[axiom](sample, all_docs, tuples, docs_lens, dict(config), scores))
+            print(len(instances))
+        pickle.dump(instances, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
 
 
 def main():

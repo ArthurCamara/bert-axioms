@@ -82,7 +82,7 @@ eval_steps:
   value: 400  # CHANGE THIS 
 axioms:
   desc: List of axioms to run
-  value: [TFC1]
+  value: [MTDC]
 delta:
   desc: Delta for TFC1 and TFC2
   value: 10

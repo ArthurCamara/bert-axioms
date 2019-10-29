@@ -139,7 +139,7 @@ def fit_bert(config, cut):
     output_dir = os.path.join(config.data_home, "models/{}-{}".format(config.bert_class, cut))
     if not os.path.isfile(os.path.join(config.data_home, "models")):
         os.makedirs(os.path.join(config.data_home, "models"))
-    # Force overwrite.
+    # Force overwrite
     if os.path.isdir(output_dir):
         os.rmdir(output_dir)
     model_to_save = model.module if hasattr(model, 'module') else model
