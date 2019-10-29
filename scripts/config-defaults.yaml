@@ -27,7 +27,7 @@ corpus_size:
   value: 3213835
 number_of_cpus:
   desc: Number of CPUs to be used on parallel bits
-  value: 48 # CHANGE THIS 
+  value: 0 # CHANGE THIS 
 max_document_len:
   desc: Maximum number of tokens to be considered in the document for the cut version of the dataset
   value: 500
@@ -82,7 +82,7 @@ eval_steps:
   value: 400  # CHANGE THIS
 axioms:
   desc: List of axioms to run
-  value: [TFC2]
+  value: [MTDC]
 delta:
   desc: Delta for TFC1 and TFC2
   value: 10

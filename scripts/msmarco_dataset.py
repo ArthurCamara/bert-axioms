@@ -146,11 +146,3 @@ class MsMarcoDataset(Dataset):
                 torch.tensor(input_ids, dtype=torch.long),
                 torch.tensor(input_mask, dtype=torch.long),
                 torch.tensor(segment_ids, dtype=torch.long))
-
-
-# if __name__ == "__main__":
-#     dataset = MsMarcoDataset(
-#         "/ssd2/arthur/TREC2019/data/triples-tokenized/cut-test.top100", "/ssd2/arthur/TREC2019/data", force=True, labeled=True)
-#     dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
-#     for index, batch in tqdm(enumerate(dataloader), desc="{} Dataset".format(dataset), total=len(dataloader)):
-#         pass

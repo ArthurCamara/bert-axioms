@@ -20,7 +20,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, output_folder):
             try:
                 line = f.readline()
                 tokens = line.split("\t")[1].split()
-            except:
+            except IndexError:
                 continue
             for w in tokens:
                 DFS[w] += 1

@@ -110,58 +110,60 @@ def TFC2(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     return instances
 
 
-def MTDC(sample, all_docs, tuples, docs_lens, args, qrels):
-    IDFS = pickle.load(open(os.path.join(args.data_home, args.idf_file), 'rb'))
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
+def MTDC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     instances = []
-    query_terms_counter = Counter(query)
-    for di_id in tqdm(tuples[topic_id]):
-        di_text = [w for w in all_docs[di_id] if w in query_terms]
-        if len(di_text) == 0:
-            continue
-        di_terms_counter = Counter(di_text)
-        di_terms_sum = sum(di_terms_counter.values())
-        for dj_id in tuples[topic_id]:
-            # same lenght
-            if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) < args.delta:
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        IDFS = pickle.load(open(os.path.join(args.data_home, args.idf_file), 'rb'))
+        query_terms = set(query)
+        query_terms_counter = Counter(query)
+        for di_id in tuples[topic_id]:
+            di_text = [w for w in all_docs[di_id] if w in query_terms]
+            if len(di_text) == 0:
                 continue
-            dj_text = [w for w in all_docs[dj_id] if w in query_terms]
-            dj_terms_counter = Counter(dj_text)
-            dj_terms_sum = sum(dj_terms_counter.values())
+            di_terms_counter = Counter(di_text)
+            di_terms_sum = sum(di_terms_counter.values())
+            for dj_id in tuples[topic_id]:
+                # same lenght
+                if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) < args.delta:
+                    continue
+                dj_text = [w for w in all_docs[dj_id] if w in query_terms]
+                dj_terms_counter = Counter(dj_text)
+                dj_terms_sum = sum(dj_terms_counter.values())
 
-            # same sum of query terms, but not equal counts
-            if di_terms_sum != dj_terms_sum or di_terms_counter == dj_terms_counter:
-                continue
+                # same sum of query terms, but not equal counts
+                if di_terms_sum != dj_terms_sum or di_terms_counter == dj_terms_counter:
+                    continue
 
-            valid_query_terms = [w for w in query_terms if di_terms_counter[w] != dj_terms_counter[w]]
-            # for each query term pair, it must be valid. It's valid if:
-            # 1. idf(wa) >= idf(wb)
-            # 2. c(wa, d1) = c(wb, d2) and c(wb, d1) = c(wa, d2)
-            # 3 c(wa,d1) > c(wa, d2)
-            # 4 c(wa, q) >= c(wb, q)
-            query_terms_used = set()
-            for wa, wb in product(valid_query_terms, valid_query_terms):
-                if wa == wb:
-                    continue
-                # smoothing
-                if IDFS[wa] == 0:
-                    IDFS[wa] = 1
-                if IDFS[wb] == 0:
-                    IDFS[wb] = 1
-                if ((1 / IDFS[wa]) < (1 / IDFS[wb])):  # 1
-                    continue
-                if not(di_terms_counter[wa] == dj_terms_counter[wb] and di_terms_counter[wb] == dj_terms_counter[wa]):
-                    continue
-                if di_terms_counter[wa] <= dj_terms_counter[wa]:  # 3
-                    continue
-                if query_terms_counter[wa] < query_terms_counter[wb]:  # 4
-                    continue
-                query_terms_used.add(wa)
-                query_terms_used.add(wb)
-            if query_terms_used == set(valid_query_terms):
-                instances.append((topic_id, di_id, dj_id))
-    return instances
+                valid_query_terms = [w for w in query_terms if di_terms_counter[w] != dj_terms_counter[w]]
+                # for each query term pair, it must be valid. It's valid if:
+                # 1. idf(wa) >= idf(wb)
+                # 2. c(wa, d1) = c(wb, d2) and c(wb, d1) = c(wa, d2)
+                # 3 c(wa,d1) > c(wa, d2)
+                # 4 c(wa, q) >= c(wb, q)
+                query_terms_used = set()
+                for wa, wb in product(valid_query_terms, valid_query_terms):
+                    if wa == wb:
+                        continue
+                    # smoothing
+                    if IDFS[wa] == 0:
+                        IDFS[wa] = 1
+                    if IDFS[wb] == 0:
+                        IDFS[wb] = 1
+                    if ((1 / IDFS[wa]) < (1 / IDFS[wb])):  # 1
+                        continue
+                    if not(di_terms_counter[wa] == dj_terms_counter[wb]
+                            and di_terms_counter[wb] == dj_terms_counter[wa]):
+                        continue
+                    if di_terms_counter[wa] <= dj_terms_counter[wa]:  # 3
+                        continue
+                    if query_terms_counter[wa] < query_terms_counter[wb]:  # 4
+                        continue
+                    query_terms_used.add(wa)
+                    query_terms_used.add(wb)
+                if query_terms_used == set(valid_query_terms):
+                    instances.append((topic_id, di_id, dj_id))
+        return instances
 
 
 def LNC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
@@ -393,7 +395,7 @@ def extract_datasets(cut):
     top_100_path = os.path.join(config.data_home, "runs/QL_test-{}.run".format(cut))
     assert os.path.isfile(top_100_path), "could not find run file at %s" % top_100_path
     assert os.path.isfile(docs_path), "could not find docs file at %s" % docs_path
-    
+
     tuples = defaultdict(lambda: set())
     all_docs = dict()
     docs_lens = dict()
@@ -465,13 +467,15 @@ def extract_datasets(cut):
             with mp.Pool(config.number_of_cpus) as pool:
                 instances = list(pool.starmap(f, zip(all_ids, chunks, all_docs_per_chunk)))
             instances_flat = [item for sublist in instances for item in sublist]
+            pickle.dump(instances_flat, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
+            logging.info("Created dataset for axiom %s with %i instances" % (axiom, len(instances_flat)))
         else:
             instances = []
             chunk = all_lines
             f = globals()[axiom]
             instances = f(0, chunk, all_docs, tuples, docs_lens, args, scores)
-        pickle.dump(instances_flat, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
-        logging.info("Created dataset for axiom %s with %i instances" % (axiom, len(instances_flat)))
+            pickle.dump(instances, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
+            logging.info("Created dataset for axiom %s with %i instances" % (axiom, len(instances)))
 
 
 # def main():
