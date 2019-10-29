@@ -10,7 +10,7 @@ from gensim.models import KeyedVectors
 import multiprocessing as mp
 import numpy as np
 from scipy.spatial.distance import cosine
-from multiprocessing import Manager, current_process
+from multiprocessing import Manager
 import wandb
 import logging
 from compute_IDF_on_whole_corpus import compute_IDFS
@@ -31,13 +31,8 @@ def TFC1(sample, all_docs, tuples, docs_lens, args, scores):
     query_terms = set(query_terms)
     instances = []
     docs_skipped = set()
-    current = current_process()
-    try:
-        position = current._identity[0] - 1
-    except:
-        position = None
     # return
-    for di_id in tqdm(tuples[topic_id], position=position, total=100):
+    for di_id in tuples[topic_id]:
         if di_id in docs_skipped:
             continue
         di_text = [w for w in all_docs[di_id] if w in query_terms]
@@ -69,7 +64,7 @@ def TFC2(sample, all_docs, tuples, docs_lens, args, qrels):
     query_terms = set(query_terms)
     instances = []
     fullfils = 0
-    for di_id in tqdm(tuples[topic_id]):
+    for di_id in tuples[topic_id]:
         di_text = [w for w in all_docs[di_id] if w in query_terms]
         if len(di_text) == 0:
             continue
@@ -424,12 +419,12 @@ def extract_datasets(cut):
         pickle.dump(all_docs, open(all_docs_p, 'wb'))
         pickle.dump(docs_lens, open(docs_lens_p, 'wb'))
         pickle.dump(tuples, open(tuples_p, 'wb'))
-    queries_file = os.path.join(config.data_home, "queries/test.tokenized.bert")
+    queries_file = os.path.join(config.data_home, "queries/test.tokenized.tsv")
     assert os.path.isfile(queries_file), "could not find queries file at %s" % queries_file
     diagnostics_path = os.path.join(config.data_home, "diagnostics")
     if not os.path.isdir(diagnostics_path):
         os.mkdir(diagnostics_path)
-    all_lines = [(x.split("\t")[0], x.split("\t")[1].split(" ")) for x in open(queries_file).readlines()]
+    all_lines = [(x.split("\t")[0], x.split("\t")[1].strip().split(" ")) for x in open(queries_file).readlines()]
     scores = {}
     for line in open(top_100_path):
         topic_id, _, doc_id, _, score, _ = line.split(" ")
@@ -446,7 +441,7 @@ def extract_datasets(cut):
         else:
             cpus = config.number_of_cpus
         logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, config.number_of_cpus, len(all_lines)))
-        if cpus > 1:
+        if cpus > 1: # TODO BROKEN.  NO RETURN VALUE
             pool = mp.Pool(config.number_of_cpus)
             jobs = []
             pbar = tqdm(total=len(all_lines))
@@ -457,6 +452,7 @@ def extract_datasets(cut):
                 pbar.update()
             f = globals()[axiom]
             jobs = []
+            # THIS WILL NOT WORK. NO RETURN VALUES
             for i in all_lines:
                 jobs.append(pool.apply_async(f, args=(i, all_docs, tuples, docs_lens, args, scores), callback=update))
             for job in jobs:
@@ -467,8 +463,9 @@ def extract_datasets(cut):
             instances = []
             for sample in tqdm(all_lines, desc="Processing {}".format(axiom)):
                 instances.append(globals()[axiom](sample, all_docs, tuples, docs_lens, dict(config), scores))
-            print(len(instances))
-        pickle.dump(instances, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
+        instances_flat = [item for sublist in instances for item in sublist]
+        pickle.dump(instances_flat, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
+        logging.info("Created dataset for axiom %s with %i instances" % (axiom, len(instances_flat)))
 
 
 def main():
