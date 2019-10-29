@@ -379,7 +379,7 @@ def extract_datasets(cut):
         offset_dict = pickle.load(open(offset_path, 'rb'))
     else:
         offset_dict = {}
-        pbar = tqdm(total=config.corpus_size + 1, desc="loading offset dict for file %s", docs_path)
+        pbar = tqdm(total=config.corpus_size + 1, desc="loading offset dict for file {}".format(docs_path))
         with open(docs_path, 'r', encoding="utf-8") as f:
             location = f.tell()
             line = f.readline().encode("utf-8")
