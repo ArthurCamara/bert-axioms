@@ -14,7 +14,7 @@ def tokenize_queries(config):
     tokenizer = DistilBertTokenizer.from_pretrained(config.bert_class)
     train_queries_path = os.path.join(config.data_home, "queries/msmarco-doctrain-queries.tsv")
     assert os.path.isfile(train_queries_path), "Train queries not found at {}".format(train_queries_path)
-    
+
     bert_file_path = train_queries_path + ".bert"
     if (not os.path.isfile(train_queries_path + ".tokenized")) or not os.path.isfile(bert_file_path) or "train_query_tokenizer" in config.force_steps:
         logging.info("tokenizing train queries")

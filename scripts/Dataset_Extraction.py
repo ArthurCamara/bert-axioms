@@ -13,7 +13,6 @@ from scipy.spatial.distance import cosine
 from multiprocessing import Manager, current_process
 import wandb
 import logging
-from itertools import repeat
 from compute_IDF_on_whole_corpus import compute_IDFS
 
 # mp.set_start_method("spawn", True)
@@ -24,7 +23,7 @@ def getcontent(doc_id, docs_file, offset_dict):
     with open(docs_file) as f:
         f.seek(offset)
         doc_id, doc = f.readline().split("\t")
-    return eval(doc)
+    return doc.split(" ")
 
 
 def TFC1(sample, all_docs, tuples, docs_lens, args, scores):
@@ -62,8 +61,6 @@ def TFC1(sample, all_docs, tuples, docs_lens, args, scores):
             if sum([di_terms_counter[w] < dj_terms_counter[w] for w in query_terms]) > 0:
                 continue
             instances.append((topic_id, di_id, dj_id))
-    # output_folder = os.path.join(os.path.join(args["data_home"], "tmp/TFC1_{}".format(topic_id)))
-    # pickle.dump(instances, open(output_folder, 'wb'))
     return instances
 
 
@@ -374,10 +371,32 @@ def extract_datasets(cut):
     config = wandb.config
     axioms = config.axioms
     if cut == 'cut':
-        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.bert")
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.tsv")
     else:
-        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert")
-    offset_dict = pickle.load(open(docs_path + ".offset", 'rb'))
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv")
+    offset_path = docs_path + ".offset"
+    if os.path.isfile(offset_path):
+        offset_dict = pickle.load(open(offset_path, 'rb'))
+    else:
+        offset_dict = {}
+        pbar = tqdm(total=config.corpus_size + 1, desc="loading offset dict for file %s", docs_path)
+        with open(docs_path, 'r', encoding="utf-8") as f:
+            location = f.tell()
+            line = f.readline().encode("utf-8")
+            pbar.update()
+            while(line):
+                if len(line) < 2:
+                    line = f.readline().encode("utf-8")
+                    pbar.update()
+                    location = f.tell()
+                    continue
+                did = line.decode().split("\t")[0]
+                offset_dict[did] = location
+                location = f.tell()
+                line = f.readline().encode("utf-8")
+                pbar.update()
+        pickle.dump(offset_dict, open(offset_path, 'wb'))
+
     top_100_path = os.path.join(config.data_home, "runs/QL_test-{}.run".format(cut))
     assert os.path.isfile(top_100_path), "could not find run file at %s" % top_100_path
     assert os.path.isfile(docs_path), "could not find docs file at %s" % docs_path
@@ -410,7 +429,7 @@ def extract_datasets(cut):
     diagnostics_path = os.path.join(config.data_home, "diagnostics")
     if not os.path.isdir(diagnostics_path):
         os.mkdir(diagnostics_path)
-    all_lines = [(x.split("\t")[0], eval(x.split("\t")[1])) for x in open(queries_file).readlines()]
+    all_lines = [(x.split("\t")[0], x.split("\t")[1].split(" ")) for x in open(queries_file).readlines()]
     scores = {}
     for line in open(top_100_path):
         topic_id, _, doc_id, _, score, _ = line.split(" ")
@@ -431,11 +450,6 @@ def extract_datasets(cut):
             pool = mp.Pool(config.number_of_cpus)
             jobs = []
             pbar = tqdm(total=len(all_lines))
-            # manager = Manager()
-            # all_docs = manager.dict(all_docs)
-            # docs_lens = manager.dict(docs_lens)
-            # scores = manager.dict(scores)
-            # args = manager.dict(dict(config))
             args = dict(config)
             instances = []
 

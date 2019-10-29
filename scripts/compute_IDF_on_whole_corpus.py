@@ -19,7 +19,7 @@ def process_chunk(chunk_no, block_offset, inf, no_lines, output_folder):
         for i in range(no_lines):
             try:
                 line = f.readline()
-                tokens = eval(line.split("\t")[1])
+                tokens = line.split("\t")[1].split()
             except:
                 continue
             for w in tokens:
@@ -47,9 +47,9 @@ def compute_IDFS(output_folder, cut):
     assert (number_of_chunks * lines_per_chunk + excess_lines) == config.corpus_size
 
     if cut == 'cut':
-        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.bert")
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.tsv")
     else:
-        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.bert")
+        docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv")
 
     block_offset = dict()
     if cpus < 2:
