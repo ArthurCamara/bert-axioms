@@ -76,22 +76,20 @@ def compute_IDFS(output_folder, cut):
 
     if cpus < 2:  # Single CPU, compute directly.
         process_chunk(0, block_offset, docs_path, lines_per_chunk, output_folder)
-        return
+    else:
+        pbar = tqdm(total=cpus, position=0)
 
-    pbar = tqdm(total=cpus, position=0)
-
-    def update(*a):  # Update progress bar
-        pbar.update()
-
-    pool = mp.Pool(cpus)
-    jobs = []
-    for i in range(len(block_offset)):
-        jobs.append(pool.apply_async(process_chunk, args=(
-            i, block_offset, docs_path, lines_per_chunk, output_folder), callback=update))
-    for job in jobs:
-        job.get()
-    pool.close()
-    pbar.close()
+        def update(*a):  # Update progress bar
+            pbar.update()
+        pool = mp.Pool(cpus)
+        jobs = []
+        for i in range(len(block_offset)):
+            jobs.append(pool.apply_async(process_chunk, args=(
+                i, block_offset, docs_path, lines_per_chunk, output_folder), callback=update))
+        for job in jobs:
+            job.get()
+        pool.close()
+        pbar.close()
     full_IDFS = Counter()
     for i in range(len(block_offset)):
         _idf = pickle.load(open(os.path.join(output_folder, "IDFS-{}".format(i)), 'rb'))

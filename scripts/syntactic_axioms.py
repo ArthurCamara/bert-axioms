@@ -3,12 +3,16 @@ import sys
 import os
 import pickle
 import multiprocessing as mp
+import wandb
+import logging
 mp.set_start_method('spawn', True)
 
 
 def TFC1(scores, args):
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "TFC1-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/TFC1-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"TFC1 size": len(dataset)})
+    logging.info("TFC has size %i" % (len(dataset)))
     agreements = 0
     for topic_id, di_id, dj_id in dataset:
         guid1 = f"{topic_id}-{di_id}"
@@ -19,8 +23,10 @@ def TFC1(scores, args):
 
 
 def TFC2(scores, args):
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "TFC2-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/TFC2-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"TFC2 size": len(dataset)})
+    logging.info("TFC2 has size %i" % (len(dataset)))
     agreements = 0
     for topic_id, di_id, dj_id, dk_id in dataset:
         guidi = f"{topic_id}-{di_id}"
@@ -32,8 +38,10 @@ def TFC2(scores, args):
 
 
 def MTDC(scores, args):
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "MTDC-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/MTDC-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"MTDC size": len(dataset)})
+    logging.info("MTDC has size %i" % (len(dataset)))
     agreements = 0
     for topic_id, di_id, dj_id in dataset:
         guid1 = f"{topic_id}-{di_id}"
@@ -44,8 +52,10 @@ def MTDC(scores, args):
 
 
 def LNC1(scores, args):
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "LNC1-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/LNC1-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"LNC1 size": len(dataset)})
+    logging.info("LNC1 has size %i" % (len(dataset)))
     agreements = 0
     for topic_id, di_id, dj_id in dataset:
         guid1 = f"{topic_id}-{di_id}"
@@ -55,9 +65,11 @@ def LNC1(scores, args):
     return len(dataset), agreements, agreements / len(dataset)
 
 
-def TP(scores, args):
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "TPC-instances")
+def TPC(scores, args):
+    dataset_path = os.path.join(args.data_home, "diagnostics/TPC-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"TPC size": len(dataset)})
+    logging.info("TPC has size %i" % (len(dataset)))
     agreements = 0
     for topic_id, di_id, dj_id in dataset:
         guid1 = f"{topic_id}-{di_id}"
@@ -114,7 +126,7 @@ def STMC2(scores, args):
     return len(dataset), agreements, agreements / len(dataset)
 
 
-def STMC3(scores, args):\
+def STMC3(scores, args):
     # conditions: D1 and D2 covers the same number of query terms
     # D1 and D2 are approx. the same size
     # D1 has more query terms than D2.
@@ -132,6 +144,27 @@ def STMC3(scores, args):\
         if scores[guid1] <= scores[guid2]:
             agreements += 1
     return len(dataset), agreements, agreements / len(dataset)
+
+
+def check_axioms(cut):
+    config = wandb.config
+    axioms = ["TFC1", "TFC2", "TPC", "MTDC", "LNC1"]  # TODO change for parameters
+    methods = {
+        "QL": os.path.join(config.data_home, "runs/{}-test-alpha_0.0.run".format(cut)),
+        "BERT": os.path.join(config.data_home, "runs/{}-test-alpha_1.0.run".format(cut))
+    }
+    for axiom in axioms:
+        logging.info("Checking axiom %s" % axiom)
+        f = globals()[axiom]
+        for method, run_file in methods.items():
+            scores = dict()
+            with open(run_file) as inf:
+                for line in inf:
+                    topic_id, _, doc_id, _, score, _ = line.split()
+                    pair_id = "{}-{}".format(topic_id, doc_id)
+                    scores[pair_id] = float(score)
+            result = f(scores, config)
+            logging.info("agreement for axiom %s and method %s: %f" % (axiom, method, result[2]))
 
 
 if __name__ == "__main__":

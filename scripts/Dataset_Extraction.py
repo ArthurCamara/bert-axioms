@@ -112,9 +112,11 @@ def TFC2(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
 
 def MTDC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     instances = []
+    IDFS = pickle.load(open(args["IDF_file"], 'rb'))
     for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
         topic_id, query = sample
-        IDFS = pickle.load(open(os.path.join(args.data_home, args.idf_file), 'rb'))
+        if topic_id is None:
+            continue
         query_terms = set(query)
         query_terms_counter = Counter(query)
         for di_id in tuples[topic_id]:
@@ -125,7 +127,7 @@ def MTDC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
             di_terms_sum = sum(di_terms_counter.values())
             for dj_id in tuples[topic_id]:
                 # same lenght
-                if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) < args.delta:
+                if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) > args["delta"]:
                     continue
                 dj_text = [w for w in all_docs[dj_id] if w in query_terms]
                 dj_terms_counter = Counter(dj_text)
@@ -163,78 +165,82 @@ def MTDC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
                     query_terms_used.add(wb)
                 if query_terms_used == set(valid_query_terms):
                     instances.append((topic_id, di_id, dj_id))
-        return instances
-
-
-def LNC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
-    query = ' '.join([x for x in tokenized_query]).replace("##", "")
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
-    instances = []
-    for di_id in tqdm(tuples[topic_id]):
-        di_text = all_docs[di_id]
-        di_terms_counter = Counter(di_text)
-        w_prime_di = set(di_text).difference(query_terms)
-        for dj_id in tuples[topic_id]:
-            if di_id == dj_id:
-                continue
-            dj_text = all_docs[dj_id]
-            dj_terms_counter = Counter(dj_text)
-            # for any query term w, c(w, d2) = c(w, d1)
-            equality = [di_terms_counter[w] == dj_terms_counter[w] for w in query_terms]
-            if sum(equality) < 0:
-                continue
-            # If for some word w′ ∈/ q, c(w′, d2) = c(w′, d1) + 1
-            flag = False
-            for w_prime in w_prime_di:
-                if dj_terms_counter[w_prime] == di_terms_counter[w_prime] + 1:
-                    flag = True
-                    break
-            if not flag:
-                continue
-            instances.append((topic_id, di_id, dj_id))
     return instances
 
 
-def TPC(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
-    query = ' '.join([x for x in tokenized_query]).replace("##", "")
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
+def LNC1(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     instances = []
-    query_pairs = product(query_terms, query_terms)
-    query_pairs = [x for x in query_pairs if x[0] != x[1]]
-    for di_id in tqdm(tuples[topic_id]):
-        min_indexes_di = []
-        di_text = all_docs[di_id]
-        di_terms = set(di_text)
-        for q1, q2 in query_pairs:
-            if q1 not in di_terms or q2 not in di_terms:
-                continue
-            all_indexes_q1 = [i for i, x in enumerate(di_text) if x == q1]
-            all_indexes_q2 = [i for i, x in enumerate(di_text) if x == q2]
-            index_pairs = list(product(all_indexes_q1, all_indexes_q2))
-            min_indexes_di.append(min(map(lambda x: abs(x[0] - x[1]), index_pairs)))
-        if len(min_indexes_di) == 0:
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        if topic_id is None:
             continue
-        min_index_di = min(min_indexes_di)
-        for dj_id in tuples[topic_id]:
-            if di_id == dj_id:
-                continue
-            min_indexes_dj = []
-            dj_text = all_docs[dj_id]
-            dj_terms = set(dj_text)
-            for q1, q2 in query_pairs:
-                if q1 not in dj_terms or q2 not in dj_terms:
+        query_terms = set(query)
+        for di_id in tqdm(tuples[topic_id]):
+            di_text = all_docs[di_id]
+            di_terms_counter = Counter(di_text)
+            w_prime_di = set(di_text).difference(query_terms)
+            for dj_id in tuples[topic_id]:
+                if di_id == dj_id:
                     continue
-                all_indexes_q1 = [i for i, x in enumerate(dj_text) if x == q1]
-                all_indexes_q2 = [i for i, x in enumerate(dj_text) if x == q2]
-                index_pairs = list(product(all_indexes_q1, all_indexes_q2))
-                min_indexes_dj.append(min(map(lambda x: abs(x[0] - x[1]), index_pairs)))
-            if len(min_indexes_dj) == 0:
-                continue
-            min_index_dj = min(min_indexes_dj)
-            if min_index_dj < min_index_di:
+                dj_text = all_docs[dj_id]
+                dj_terms_counter = Counter(dj_text)
+                # for any query term w, c(w, d2) = c(w, d1)
+                equality = [di_terms_counter[w] == dj_terms_counter[w] for w in query_terms]
+                if sum(equality) < 0:
+                    continue
+                # If for some word w′ ∈/ q, c(w′, d2) = c(w′, d1) + 1
+                flag = False
+                for w_prime in w_prime_di:
+                    if dj_terms_counter[w_prime] == di_terms_counter[w_prime] + 1:
+                        flag = True
+                        break
+                if not flag:
+                    continue
                 instances.append((topic_id, di_id, dj_id))
+        return instances
+
+
+def TPC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
+    instances = []
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        if topic_id is None:
+            continue
+        query_terms = set(query)
+        query_pairs = product(query_terms, query_terms)
+        query_pairs = [x for x in query_pairs if x[0] != x[1]]
+        for di_id in tuples[topic_id]:
+            min_indexes_di = []
+            di_text = all_docs[di_id]
+            di_terms = set(di_text)
+            for q1, q2 in query_pairs:
+                if q1 not in di_terms or q2 not in di_terms:
+                    continue
+                all_indexes_q1 = [i for i, x in enumerate(di_text) if x == q1]
+                all_indexes_q2 = [i for i, x in enumerate(di_text) if x == q2]
+                index_pairs = list(product(all_indexes_q1, all_indexes_q2))
+                min_indexes_di.append(min(map(lambda x: abs(x[0] - x[1]), index_pairs)))
+            if len(min_indexes_di) == 0:
+                continue
+            min_index_di = min(min_indexes_di)
+            for dj_id in tuples[topic_id]:
+                if di_id == dj_id:
+                    continue
+                min_indexes_dj = []
+                dj_text = all_docs[dj_id]
+                dj_terms = set(dj_text)
+                for q1, q2 in query_pairs:
+                    if q1 not in dj_terms or q2 not in dj_terms:
+                        continue
+                    all_indexes_q1 = [i for i, x in enumerate(dj_text) if x == q1]
+                    all_indexes_q2 = [i for i, x in enumerate(dj_text) if x == q2]
+                    index_pairs = list(product(all_indexes_q1, all_indexes_q2))
+                    min_indexes_dj.append(min(map(lambda x: abs(x[0] - x[1]), index_pairs)))
+                if len(min_indexes_dj) == 0:
+                    continue
+                min_index_dj = min(min_indexes_dj)
+                if min_index_dj < min_index_di:
+                    instances.append((topic_id, di_id, dj_id))
     return instances
 
 
@@ -431,14 +437,21 @@ def extract_datasets(cut):
         scores["{}-{}".format(topic_id, doc_id)] = float(score)
     for axiom in axioms:
         if axiom == "MTDC":  # We need IDFs!
-            IDF_folder = os.path.join(config.data_home, "docs/IDFS/IDFS-FULL")
+            IDF_folder = os.path.join(config.data_home, "docs/IDFS/IDFS-FULL-{}".format(cut))
+            config.IDF_file = IDF_folder
             if not os.path.isfile(IDF_folder):
                 # Generate IDFs
                 compute_IDFS(IDF_folder.replace("/IDFS-FULL", ""), cut)
-            return
+        elif "STMC" in axiom:  # We need the word embeddings!
+            embeddings_path = os.path.join(config.data_home, "GloVe/w2v.txt")
+            assert os.path.isfile(embeddings_path), ("Embeddings not found at %s. They need to be manually computed!"
+                                                     % embeddings_path)
+                # Compute Embeddings manually. 
+
 
         cpus = config.number_of_cpus
         logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, config.number_of_cpus, len(all_lines)))
+        args = dict(config)
         if cpus > 1:
             if len(all_lines) % config.number_of_cpus != 0:
                 logging.info("padding topics with %i empty topics" % (len(all_lines) % config.number_of_cpus))
@@ -456,8 +469,6 @@ def extract_datasets(cut):
                     for doc in tuples[topic]:
                         chunk_dict[doc] = all_docs[doc]
                 all_docs_per_chunk.append(chunk_dict)
-
-            args = dict(config)
             f = partial(globals()[axiom],
                         tuples=tuples,
                         docs_lens=docs_lens,
