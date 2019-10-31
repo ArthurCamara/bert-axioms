@@ -88,8 +88,10 @@ def STMC1(scores, args):
 
     di and dj has the same number of query terms. Remove all query terms. Check similarity with query. should correspond to score.
     '''
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "STMC1-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/STMC1-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"STMC1 size": len(dataset)})
+    logging.info("STMC1 has size %i" % (len(dataset)))
     agreements = 0
     if len(dataset) == 1558:
         dataset = [item for sublist in dataset for item in sublist]
@@ -112,8 +114,11 @@ def STMC2(scores, args):
     sum(d1_terms) > sum(d2_terms).
     S(d1) > S(d2)
     '''
-    dataset_path = os.path.join(args.data_home, args.datasets_path, "STMC2-instances")
+    dataset_path = os.path.join(args.data_home, "diagnostics/STMC2-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
+    wandb.log({"STMC2 size": len(dataset)})
+    logging.info("STMC2 has size %i" % (len(dataset)))
+
     agreements = 0
 
     if len(dataset) == 1558:
@@ -132,7 +137,6 @@ def STMC3(scores, args):
     # D1 has more query terms than D2.
     # D2 without query terms is more similar to q than D1.
 
-
     dataset_path = os.path.join(args.data_home, args.datasets_path, "STMC3-instances")
     dataset = pickle.load(open(dataset_path, 'rb'))
     if len(dataset) == 1558:
@@ -148,7 +152,7 @@ def STMC3(scores, args):
 
 def check_axioms(cut):
     config = wandb.config
-    axioms = ["TFC1", "TFC2", "TPC", "MTDC", "LNC1"]  # TODO change for parameters
+    axioms = ["STMC1", "STMC2"]  # TODO change for parameters
     methods = {
         "QL": os.path.join(config.data_home, "runs/{}-test-alpha_0.0.run".format(cut)),
         "BERT": os.path.join(config.data_home, "runs/{}-test-alpha_1.0.run".format(cut))
@@ -165,38 +169,3 @@ def check_axioms(cut):
                     scores[pair_id] = float(score)
             result = f(scores, config)
             logging.info("agreement for axiom %s and method %s: %f" % (axiom, method, result[2]))
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_home", type=str, default="/ssd2/arthur/TREC2019/data/")
-    parser.add_argument("--axioms", type=str)
-    parser.add_argument("--datasets_path", default="diagnostics")
-
-    docoffset = {}
-
-    if len(sys.argv) > 2:
-        args = parser.parse_args(sys.argv[1:])
-    else:
-        argv = [
-            "--axioms", "TFC1"]
-        args = parser.parse_args(argv)
-
-    methods = {
-        "QL": os.path.join(args.data_home, 'runs', "test_distilBert-0.0.run"),
-        "BERT": os.path.join(args.data_home, 'runs', "test_distilBert-1.0.run"),
-        "QL+BERT": os.path.join(args.data_home, 'runs', "test_distilBert-0.85.run")
-    }
-
-    for axiom in args.axioms.split(","):
-        print(axiom)
-        for method in methods:
-            scores = dict()
-            run_file = methods[method]
-
-            with open(run_file) as inf:
-                for line in inf:
-                    topic_id, _, doc_id, _, score, _ = line.split()
-                    pair_id = "{}-{}".format(topic_id, doc_id)
-                    scores[pair_id] = float(score)
-            print("\t", method, globals()[axiom](scores, args))

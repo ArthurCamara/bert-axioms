@@ -10,6 +10,8 @@ import wandb
 import logging
 from compute_IDF_on_whole_corpus import compute_IDFS
 from functools import partial
+from gensim.models import KeyedVectors
+logging.getLogger("gensim").setLevel(logging.WARNING)
 
 
 # mp.set_start_method("spawn", True)
@@ -244,7 +246,7 @@ def TPC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     return instances
 
 
-def STMC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
+def STMC1(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     '''
     Let Q = {q} be a query with only one term q. -> Relaxation - Multiple terms
     Let D1 = {d1} and D2 = {d2} be two single-term documents, where q != d1 and q != d2.
@@ -256,38 +258,42 @@ def STMC1(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
         should correspond to score.
     '''
 
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
     instances = []
-    _docs = list(tuples[topic_id])
-    query_avg = np.mean(args.vectors[[x for x in query if x in args.vectors.vocab]], axis=0)
-    for i, di_id in tqdm(enumerate(_docs), total=100):
-        di_text = all_docs[di_id]
-        # remove query terms
-        di_clean = [w for w in di_text if w not in query_terms]
-        di_query_terms = [w for w in di_text if w in query_terms]
-        di_avg = np.mean(args.vectors[[x for x in di_clean if x in args.vectors.vocab]], axis=0)
-        di_similarity = cosine(di_avg, query_avg)
-        for dj_id in _docs[i:]:
-            if di_id == dj_id:
-                continue
-            dj_text = all_docs[dj_id]
-            dj_query_terms = [w for w in dj_text if w in query_terms]
-            dj_clean_text = [w for w in dj_text if w not in query_terms]
-            dj_avg = np.mean(args.vectors[[x for x in dj_clean_text if x in args.vectors.vocab]], axis=0)
-            # di_id and dj_id must have same number of query terms
-            if len(di_query_terms) != len(dj_query_terms):
-                continue
-            # at least one query term occur in di but not in dj
-            dj_similarity = cosine(dj_avg, query_avg)
-            if di_similarity > dj_similarity:
-                instances.append((topic_id, di_id, dj_id))
-            elif dj_similarity > di_similarity:
-                instances.append((topic_id, dj_id, di_id))
+    vectors = args["vectors"]
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        if topic_id is None:
+            continue
+        query_terms = set(query)
+        _docs = list(tuples[topic_id])
+        query_avg = np.mean(vectors[[x for x in query if x in vectors.vocab]], axis=0)
+        for i, di_id in enumerate(_docs):
+            di_text = all_docs[di_id]
+            # remove query terms
+            di_clean = [w for w in di_text if w not in query_terms]
+            di_query_terms = [w for w in di_text if w in query_terms]
+            di_avg = np.mean(vectors[[x for x in di_clean if x in vectors.vocab]], axis=0)
+            di_similarity = cosine(di_avg, query_avg)
+            for dj_id in _docs[i:]:
+                if di_id == dj_id:
+                    continue
+                dj_text = all_docs[dj_id]
+                dj_query_terms = [w for w in dj_text if w in query_terms]
+                if len(di_query_terms) != len(dj_query_terms):
+                    continue
+                dj_clean_text = [w for w in dj_text if w not in query_terms]
+                dj_avg = np.mean(vectors[[x for x in dj_clean_text if x in vectors.vocab]], axis=0)
+                # di_id and dj_id must have same number of query terms
+                # at least one query term occur in di but not in dj
+                dj_similarity = cosine(dj_avg, query_avg)
+                if di_similarity > dj_similarity:
+                    instances.append((topic_id, di_id, dj_id))
+                elif dj_similarity > di_similarity:
+                    instances.append((topic_id, dj_id, di_id))
     return instances
 
 
-def STMC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
+def STMC2(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     '''
     Let Q = {q} be a single term query -> Multiple terms
     and d be a non-query term such that s(q, d) > 0.
@@ -300,65 +306,72 @@ def STMC2(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
     avg(d1_terms) > avg(d2_terms).
     S(d1) > S(d2)
     '''
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
+
     instances = []
-    pbar = tqdm(total=4950)
-    _docs = list(tuples[topic_id])
-    for i, di_id in enumerate(_docs):
-        # remove query terms
-        di_clean = [w for w in all_docs[di_id] if w not in query_terms]
-        di_query_terms = [w for w in all_docs[di_id] if w in query_terms]
-        di_avg = np.mean(args.vectors[[x for x in di_clean if x in args.vectors.vocab]], axis=0)
-        for dj_id in _docs[i:]:
-            pbar.update()
-            if di_id == dj_id:
-                continue
-            dj_clean = [w for w in all_docs[dj_id] if w not in query_terms]
-            # di and dj must be similar
-            dj_avg = np.mean(args.vectors[[x for x in dj_clean if x in args.vectors.vocab]], axis=0)
-            di_dj_distance = cosine(di_avg, dj_avg)
-            if di_dj_distance > args.stmc_sim:
-                continue
-            dj_query_terms = [w for w in all_docs[dj_id] if w in query_terms]
-            # di must have more query terms than dj
-            if len(dj_query_terms) > len(di_query_terms):
-                instances.append((topic_id, dj_id, di_id))
-            elif len(dj_query_terms) < len(di_query_terms):
-                instances.append((topic_id, di_id, dj_id))
+    vectors = args["vectors"]
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        if topic_id is None:
+            continue
+        query_terms = set(query)
+        _docs = list(tuples[topic_id])
+        for i, di_id in enumerate(_docs):
+            # remove query terms
+            di_clean = [w for w in all_docs[di_id] if w not in query_terms]
+            di_query_terms = [w for w in all_docs[di_id] if w in query_terms]
+            di_avg = np.mean(vectors[[x for x in di_clean if x in vectors.vocab]], axis=0)
+            for dj_id in _docs[i:]:
+                if di_id == dj_id:
+                    continue
+                dj_clean = [w for w in all_docs[dj_id] if w not in query_terms]
+                # di and dj must be similar
+                dj_avg = np.mean(vectors[[x for x in dj_clean if x in vectors.vocab]], axis=0)
+                di_dj_distance = cosine(di_avg, dj_avg)
+                if di_dj_distance > args["stmc_sim"]:
+                    continue
+                dj_query_terms = [w for w in all_docs[dj_id] if w in query_terms]
+                # di must have more query terms than dj
+                if len(dj_query_terms) > len(di_query_terms):
+                    instances.append((topic_id, dj_id, di_id))
+                elif len(dj_query_terms) < len(di_query_terms):
+                    instances.append((topic_id, di_id, dj_id))
     return instances
 
 
-def STMC3(topic_id, tokenized_query, all_docs, tuples, docs_lens, args, scores):
+def STMC3(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     '''
     conditions: D1 and D2 covers the same number of query terms
     D1 and D2 are approx. the same size
     D1 has more query terms than D2.
     D2 without query terms is more similar to q than D1.
     '''
-    query = [x.replace("##", "") for x in tokenized_query]
-    query_terms = set(query)
     instances = []
-    query_avg = np.mean(args.vectors[[x for x in query if x in args.vectors.vocab]], axis=0)
-    _docs = list(tuples[topic_id])
-    for i, di_id in tqdm(enumerate(_docs), total=100):
-        di_clean = [w for w in all_docs[di_id] if w not in query_terms]  # Di without query terms
-        di_query_terms = [w for w in all_docs[di_id] if w in query_terms]
-        di_query_set = set(di_query_terms)
-        di_avg = np.mean(args.vectors[[x for x in di_clean if x in args.vectors.vocab]], axis=0)
-        di_query_sim = cosine(di_avg, query_avg)
-        for dj_id in _docs[i:]:
-            # similarity
-            if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) >= args.delta:
-                continue
-            dj_query_terms = [w for w in all_docs[dj_id] if w in query_terms]
-            dj_query_set = set(dj_query_terms)
+    vectors = args["vectors"]
+    for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
+        topic_id, query = sample
+        if topic_id is None:
+            continue
+        query_terms = set(query)
+        query_avg = np.mean(vectors[[x for x in query if x in vectors.vocab]], axis=0)
+        _docs = list(tuples[topic_id])
+        for i, di_id in tqdm(enumerate(_docs), total=100):
+            di_clean = [w for w in all_docs[di_id] if w not in query_terms]  # Di without query terms
+            di_query_terms = [w for w in all_docs[di_id] if w in query_terms]
+            di_query_set = set(di_query_terms)
+            di_avg = np.mean(vectors[[x for x in di_clean if x in vectors.vocab]], axis=0)
+            di_query_sim = cosine(di_avg, query_avg)
+            for dj_id in _docs[i:]:
+                # similarity
+                if di_id == dj_id or abs(docs_lens[di_id] - docs_lens[dj_id]) >= args["delta"]:
+                    continue
+                dj_query_terms = [w for w in all_docs[dj_id] if w in query_terms]
+                dj_query_set = set(dj_query_terms)
 
             # both must cover same number of terms
             if len(dj_query_set) != len(di_query_set):
                 continue
             dj_clean = [w for w in all_docs[dj_id] if w not in query_terms]
-            dj_avg = np.mean(args.vectors[[x for x in dj_clean if x in args.vectors.vocab]], axis=0)
+            dj_avg = np.mean(vectors[[x for x in dj_clean if x in vectors.vocab]], axis=0)
             dj_query_sim = cosine(dj_avg, query_avg)
             if len(di_clean) > len(dj_clean) and dj_query_sim > di_query_sim:
                 instances.append((topic_id, di_id, dj_id))
@@ -436,6 +449,7 @@ def extract_datasets(cut):
         topic_id, _, doc_id, _, score, _ = line.split(" ")
         scores["{}-{}".format(topic_id, doc_id)] = float(score)
     for axiom in axioms:
+        vectors = None
         if axiom == "MTDC":  # We need IDFs!
             IDF_folder = os.path.join(config.data_home, "docs/IDFS/IDFS-FULL-{}".format(cut))
             config.IDF_file = IDF_folder
@@ -446,12 +460,17 @@ def extract_datasets(cut):
             embeddings_path = os.path.join(config.data_home, "GloVe/w2v.txt")
             assert os.path.isfile(embeddings_path), ("Embeddings not found at %s. They need to be manually computed!"
                                                      % embeddings_path)
-                # Compute Embeddings manually. 
-
+            if vectors is None:
+                logging.info("Loading embeddings from %s" % embeddings_path)
+                vectors = KeyedVectors.load_word2vec_format(embeddings_path)
+                vectors.init_sims(replace=True)
+                # After generating the vectors using GLoVe, they also need to be transformed into W2V format.
+                # Check https://radimrehurek.com/gensim/scripts/glove2word2vec.html on how to do so.
 
         cpus = config.number_of_cpus
         logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, config.number_of_cpus, len(all_lines)))
         args = dict(config)
+        args["vectors"] = vectors
         if cpus > 1:
             if len(all_lines) % config.number_of_cpus != 0:
                 logging.info("padding topics with %i empty topics" % (len(all_lines) % config.number_of_cpus))
@@ -487,102 +506,3 @@ def extract_datasets(cut):
             instances = f(0, chunk, all_docs, tuples, docs_lens, args, scores)
             pickle.dump(instances, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
             logging.info("Created dataset for axiom %s with %i instances" % (axiom, len(instances)))
-
-
-# def main():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("--data_home", type=str, default="/ssd2/arthur/TREC2019/data")
-#     parser.add_argument("--docs_file", type=str, default="docs/tokenized-msmarco-docs.tsv")
-#     parser.add_argument("--queries_file", type=str, default="queries/test_queries.tsv")
-#     parser.add_argument("--axioms", type=str, default="TFC1,TFC2,MTDC,LNC1,LNC2,LB1,LB2,STMC1,STMC2,STMC3,TP")
-#     parser.add_argument("--top100", type=str, default="runs/indri_test_10_10.run")
-#     parser.add_argument("--cpus", type=int, default=1)
-#     parser.add_argument("--total_docs", type=int, default=3213835)
-#     parser.add_argument("--delta", type=int, default=10)
-#     parser.add_argument("--idf_file", type=str, default="docs/IDFS/IDFS-FULL")
-#     parser.add_argument("--embeddings_path", type=str, default="GloVe/w2v.txt")
-#     parser.add_argument("--stmc_sim", type=float, default=0.2)
-
-#     if len(sys.argv) < 2:
-#         argv = ["--cpus", "1",
-#                 "--axioms", "TPC"]
-#         args = parser.parse_args(argv)
-#     else:
-#         args = parser.parse_args(sys.argv[1:])
-#     print(args)
-
-#     docs_path = os.path.join(args.data_home, args.docs_file)
-#     offset_dict = pickle.load(open(docs_path + ".offset", 'rb'))
-#     top_100_path = os.path.join(args.data_home, args.top100)
-#     assert os.path.isfile(top_100_path)
-#     assert os.path.isfile(docs_path)
-
-#     tuples = defaultdict(lambda: set())
-#     all_docs = dict()
-#     docs_lens = dict()
-#     for i in tqdm(open(top_100_path), total=155800, desc="loading docs and queries"):
-#         topic_id, _, doc_id, _, score, _ = i.split()
-#         tuples[topic_id].add(doc_id)
-#         if doc_id in all_docs:
-#             continue
-#         all_docs[doc_id] = getcontent(doc_id, docs_path, offset_dict).split()
-#         docs_lens[doc_id] = len(all_docs[doc_id])
-#     tuples = dict(tuples)
-
-#     queries_file = os.path.join(args.data_home, args.queries_file)
-#     assert os.path.isfile(queries_file)
-
-#     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-#     diagnostics_path = os.path.join(args.data_home, "diagnostics")
-#     if not os.path.isdir(diagnostics_path):
-#         os.mkdir(diagnostics_path)
-
-#     all_lines = [(x.split("\t")[0], tokenizer.tokenize(x.split("\t")[1])) for x in open(queries_file).readlines()]
-#     # qrels_path = os.path.join(args.data_home, 'qrels', "test_qrels")
-#     qrels = {}
-#     for line in open("/ssd2/arthur/TREC2019/data/runs/indri_test_10_10.run"):
-#         topic_id, _, doc_id, _, score, _ = line.split(" ")
-#         qrels["{}-{}".format(topic_id, doc_id)] = float(score)
-#         # if topic_id in qrels:
-#         #     qrels[topic_id].append(doc_id)
-#         # else:
-#         #     qrels[topic_id] = [doc_id]
-#     args.qrels = qrels
-
-#     for axiom in args.axioms.split(","):
-#         instances = []
-#         if "STMC" in axiom:
-#             # load GloVe embeddings
-#             vectors = KeyedVectors.load_word2vec_format(os.path.join(args.data_home, args.embeddings_path))
-#             vectors.init_sims(replace=True)
-#             args.vectors = vectors
-#             pbar = tqdm(total=len(all_lines))
-
-#         if args.cpus > 1:
-#             pool = mp.Pool(args.cpus)
-#             jobs = []
-
-#             manager = Manager()
-#             all_docs = manager.dict(all_docs)
-#             docs_lens = manager.dict(docs_lens)
-
-#             def update(instance):
-#                 pbar.update()
-#                 instances.append(instance)
-
-#             for q_id, tokenized_query in all_lines:
-#                 jobs.append(pool.apply_async(globals()[axiom], args=(q_id, tokenized_query, all_docs, tuples, docs_lens, args), callback=update)) # noqa E301
-#             for p in jobs:
-#                 p.get()
-#             pbar.close()
-#             pool.close()
-#         else:
-#             for q_id, tokenized_query in tqdm(all_lines):
-#                 instances += globals()[axiom](q_id, tokenized_query, all_docs, tuples, docs_lens, args)
-
-#         pickle.dump(instances, open(os.path.join(diagnostics_path, "{}-instances".format(axiom)), 'wb'))
-
-
-# if __name__ == "__main__":
-#     main()

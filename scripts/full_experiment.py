@@ -68,10 +68,10 @@ def main():
     # generate_run_file("test", "full")
 
     # Create datasets
-    # extract_datasets("cut")
+    extract_datasets("cut")
 
     # Check axiomatic performance
-    check_axioms("cut")
+    # check_axioms("cut")
 
 
 if __name__ == "__main__":
