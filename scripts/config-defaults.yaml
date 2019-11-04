@@ -15,7 +15,7 @@ logging_level:
   value: "INFO"
 force_steps:
   desc: Steps to forecefully run, even if the output file for the step is present
-  value: [bert_transform-test-cut, bert_transform-test-full, feature_generator]
+  value: [index_cut]
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -82,10 +82,13 @@ eval_steps:
   value: 400  # CHANGE THIS
 axioms:
   desc: List of axioms to run
-  value: [STMC3]
+  value: [LNC2]
 delta:
   desc: Delta for TFC1 and TFC2
   value: 10
 stmc_sim:
   desc:  MInumum similarity between documents for STMC
   value: 0.2
+LNC2_path:
+  desc: Path for the LNC2 CPP code (already compiled!)
+  value: /ssd2/arthur/indri/LNC2

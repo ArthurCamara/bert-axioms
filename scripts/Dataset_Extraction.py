@@ -11,6 +11,8 @@ import logging
 from compute_IDF_on_whole_corpus import compute_IDFS
 from functools import partial
 from gensim.models import KeyedVectors
+from bert_transform import generate_run_file
+import re
 logging.getLogger("gensim").setLevel(logging.WARNING)
 
 
@@ -23,6 +25,18 @@ def getcontent(doc_id, docs_file, offset_dict):
         f.seek(offset)
         doc_id, doc = f.readline().split("\t")
     return doc.split(" ")
+
+
+def truncate_seq_pair(tokens_a, tokens_b, max_length=509):
+    """Truncates a sequence pair in place to the maximum length."""
+    while True:
+        total_length = len(tokens_a) + len(tokens_b)
+        if total_length <= max_length:
+            break
+        if len(tokens_a) > len(tokens_b):
+            tokens_a.pop()
+        else:
+            tokens_b.pop()
 
 
 def TFC1(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
@@ -202,6 +216,70 @@ def LNC1(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
         return instances
 
 
+def LNC2(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
+    """Prepares param file for c++ code and prepares test file for bert model
+    THIS SHOULD ONLY BE RUN IN A SINGLE PROCESS!
+    """
+
+    # first, new indri param
+    queries_path = os.path.join(args["data_home"], "queries/test.tokenized.tsv")
+    new_param_file = os.path.join(args["data_home"], "indri_params/LNC2.param")
+    param_format = "<query>\n<number>{}</number>\n<text>{}</text>\n</query>\n"
+    run_path = os.path.join(args["data_home"], "runs/QL_test-cut.run")
+    pattern = re.compile('([^\s\w]|_)+')  # noqa W605
+    with open(new_param_file, 'w') as outf:
+        index_path = os.path.join(args["data_home"], "indexes/cut-tokenized")
+        outf.write(f"<parameters>\n<rankedDocsFile>{run_path}</rankedDocsFile>\n<index>{index_path}</index>\n")
+        for line in open(queries_path):
+            q_id, query = line.strip().split("\t")
+            query = pattern.sub('', query)
+            outf.write(param_format.format(q_id, query))
+        outf.write("</parameters>\n")
+
+    # Generate a list of documents that were ranked that should be copied. copy and generate a file for BERT input.
+    # Load queries
+    queries_file = os.path.join(args["data_home"], "queries/test.tokenized.bert")
+    queries = {}
+    for line in open(queries_file):
+        topic_id, query = line.strip().split("\t")
+        query = eval(query)
+        queries[topic_id] = query
+    # Load docs, bert version.
+    docs_file = os.path.join(args["data_home"], "docs/msmarco-docs.tokenized.bert")
+    offset_dict = pickle.load(open(docs_file + ".offset", 'rb'))
+    instances = []
+    new_triples_file = os.path.join(args["data_home"], "triples/LNC-cut-triples.tsv")
+    if not os.path.isfile(new_triples_file):
+        with open(new_triples_file, 'w') as outf:
+            for line in tqdm(open(run_path), total=100 * args["test_set_size"]):
+                topic_id, _, doc_id, _, score, _ = line.split()
+                # Check doc length
+                if docs_lens[doc_id] > 256:
+                    continue
+                doc = getcontent(doc_id, docs_file, offset_dict)
+                tokens = ["[CLS]"] + queries[topic_id] + ["[SEP]"] + doc[:512] + ["[SEP]"]
+                # Dummy relevance label.
+                outf.write("{}-{}\t{}\t1\n".format(topic_id, doc_id, tokens))
+                instances.append((topic_id, doc_id, doc_id + "-LNC2"))
+                k = 512 // len(doc)
+                doc = doc * k
+                # Create triple with proper tokens
+                query = queries[topic_id]
+                truncate_seq_pair(query, doc)
+                tokens = ["[CLS]"] + query + ["[SEP]"] + doc + ["[SEP]"]
+                outf.write("{}-{}-LNC2\t{}\t0\n".format(topic_id, doc_id, tokens))
+        generate_run_file("test", "cut", new_triples_file)
+    else:
+        for line in tqdm(open(run_path), total=100 * args["test_set_size"]):
+            topic_id, _, doc_id, _, score, _ = line.split()
+            # Check doc length
+            if docs_lens[doc_id] > 256:
+                continue
+            instances.append((topic_id, doc_id, doc_id + "-LNC2"))
+    # Generate run file for this
+    return instances
+
+
 def TPC(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
     instances = []
     for sample in tqdm(chunk, desc="processor {}".format(chunk_no), position=chunk_no):
@@ -354,7 +432,7 @@ def STMC3(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
         query_terms = set(query)
         query_avg = np.mean(vectors[[x for x in query if x in vectors.vocab]], axis=0)
         _docs = list(tuples[topic_id])
-        for i, di_id in tqdm(enumerate(_docs), total=100):
+        for i, di_id in enumerate(_docs):
             di_clean = [w for w in all_docs[di_id] if w not in query_terms]  # Di without query terms
             di_query_terms = [w for w in all_docs[di_id] if w in query_terms]
             di_query_set = set(di_query_terms)
@@ -366,17 +444,16 @@ def STMC3(chunk_no, chunk, all_docs, tuples, docs_lens, args, scores):
                     continue
                 dj_query_terms = [w for w in all_docs[dj_id] if w in query_terms]
                 dj_query_set = set(dj_query_terms)
-
-            # both must cover same number of terms
-            if len(dj_query_set) != len(di_query_set):
-                continue
-            dj_clean = [w for w in all_docs[dj_id] if w not in query_terms]
-            dj_avg = np.mean(vectors[[x for x in dj_clean if x in vectors.vocab]], axis=0)
-            dj_query_sim = cosine(dj_avg, query_avg)
-            if len(di_clean) > len(dj_clean) and dj_query_sim > di_query_sim:
-                instances.append((topic_id, di_id, dj_id))
-            elif len(dj_clean) > len(di_clean) and di_query_sim > dj_query_sim:
-                instances.append((topic_id, dj_id, di_id))
+                # both must cover same number of terms
+                if len(dj_query_set) != len(di_query_set):
+                    continue
+                dj_clean = [w for w in all_docs[dj_id] if w not in query_terms]
+                dj_avg = np.mean(vectors[[x for x in dj_clean if x in vectors.vocab]], axis=0)
+                dj_query_sim = cosine(dj_avg, query_avg)
+                if len(di_clean) > len(dj_clean) and dj_query_sim > di_query_sim:
+                    instances.append((topic_id, di_id, dj_id))
+                elif len(dj_clean) > len(di_clean) and di_query_sim > dj_query_sim:
+                    instances.append((topic_id, dj_id, di_id))
     return instances
 
 
@@ -449,6 +526,7 @@ def extract_datasets(cut):
         topic_id, _, doc_id, _, score, _ = line.split(" ")
         scores["{}-{}".format(topic_id, doc_id)] = float(score)
     for axiom in axioms:
+        cpus = config.number_of_cpus
         vectors = None
         if axiom == "MTDC":  # We need IDFs!
             IDF_folder = os.path.join(config.data_home, "docs/IDFS/IDFS-FULL-{}".format(cut))
@@ -466,9 +544,9 @@ def extract_datasets(cut):
                 vectors.init_sims(replace=True)
                 # After generating the vectors using GLoVe, they also need to be transformed into W2V format.
                 # Check https://radimrehurek.com/gensim/scripts/glove2word2vec.html on how to do so.
-
-        cpus = config.number_of_cpus
-        logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, config.number_of_cpus, len(all_lines)))
+        elif axiom == "LNC2":
+            cpus = 0
+        logging.info("Running axiom %s with %i cpus and %i lines" % (axiom, max(1, cpus), len(all_lines)))
         args = dict(config)
         args["vectors"] = vectors
         if cpus > 1:

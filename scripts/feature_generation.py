@@ -40,7 +40,7 @@ def generate_docs_offset(doc_file, config):
             line = inf.readline()
             try:
                 doc_id, _ = line.split("\t")
-            except:
+            except IndexError:
                 continue
             offset_dict[doc_id] = location
             location = inf.tell()
@@ -75,7 +75,8 @@ def generate_features(config, cut, split):
                 relevants[topic_id].add(doc_id)
         logging.info("Read %i positive samples", len(relevants))
         negative_docs = defaultdict(lambda: set())
-        for line in tqdm(open(QL_run_file, 'r'), total=expected_lines * config.indri_top_k, desc="loading run file for {}".format(split)):
+        total_lines = expected_lines * config.indri_top_k
+        for line in tqdm(open(QL_run_file, 'r'), total=total_lines, desc="loading run file for {}".format(split)):
             topic_id, _, doc_id, _, _, _ = line.split()
             if doc_id not in relevants[topic_id]:
                 negative_docs[topic_id].add(doc_id)
@@ -111,14 +112,14 @@ def generate_features(config, cut, split):
         queries_path = os.path.join(config.data_home, "queries/msmarco-doctrain-queries.tsv.bert")
     else:
         queries_path = os.path.join(config.data_home, "queries/{}.tokenized.bert".format(split))
-    
+
     assert os.path.isfile(queries_path), "Queries file not found at %s" % queries_path
     queries = dict()
     for line in open(queries_path):
         topic_id, query = line[:-1].split("\t")
         queries[topic_id] = query
     assert len(queries) == expected_lines
-    
+
     # Prepare docs
     if cut == "cut":
         docs_file = os.path.join(config.data_home, "docs/msmarco-docs.tokenized.cut.bert")
