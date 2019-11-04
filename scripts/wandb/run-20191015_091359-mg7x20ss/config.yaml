@@ -1,0 +1,19 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.8.12
+    is_jupyter_run: false
+    magic:
+      enable: true
+    python_version: 3.7.3
+epochs:
+  desc: Number of epochs to train over
+  value: 3
+seed:
+  desc: null
+  value: 42
+tokenizer_class:
+  desc: Class to be used on tokenizer
+  value: distilbert-base-uncased

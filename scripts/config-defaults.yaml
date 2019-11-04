@@ -1,0 +1,94 @@
+seed:
+  desc: Random seed
+  value: 42
+bert_class:
+  desc: Class to be used on bert and on tokenizer
+  value: "distilbert-base-uncased"
+data_home:
+  desc: Where to save data to
+  value: "/ssd2/arthur/bert-axioms"
+download_path:
+  desc: Default msmarco download path
+  value: "https://msmarco.blob.core.windows.net/msmarcoranking/"
+logging_level:
+  desc: Level for Python logger
+  value: "INFO"
+force_steps:
+  desc: Steps to forecefully run, even if the output file for the step is present
+  value: [index_cut]
+train_queries:
+  desc: Number of train queries expected
+  value: 367013
+full_dev_queries:
+  desc: Number of dev queries in the original dataset
+  value: 5193
+corpus_size:
+  desc: Number of documents in the corpus
+  value: 3213835
+number_of_cpus:
+  desc: Number of CPUs to be used on parallel bits
+  value: 24 # CHANGE THIS 
+max_document_len:
+  desc: Maximum number of tokens to be considered in the document for the cut version of the dataset
+  value: 500
+indri_bin_path:
+  desc: Path wihere Indri is installed
+  value: "/ssd2/arthur/indri/bin"
+split_percentage:
+  desc: Percentage for test splitting
+  value: .3
+metric:
+  desc: Main metric to be reported using trec_eval
+  value: "ndcg"
+indri_top_k:
+  desc: Number of documents to be retrieved by Indri to re-rank
+  value: 100
+trec_eval_path:
+  desc: Path for trec_eval
+  value: "/ssd2/arthur/trec_eval/trec_eval"
+test_set_size:
+  desc: Size of the test dataset. 30% of the full_dev_queries, if split_percentage is .3.
+  value: 1558 
+negative_samples:
+  desc: Number of negative samples for each positive sample
+  value: 10
+ignore_gpu_ids:
+  desc: GPU IDs to ignore when running
+  value: [0, 2, 5,6,7]
+batch_per_device:
+  desc: "Size of training batch for each GPU. Must be enough to fit in ONE GPU only.
+  Final batch_size is num_gpus*this. Each sample, with max_len=512, takes about 522MB."
+  value: 16
+eval_batchsize:
+  desc: Size of DEV batch. Make sure it fits in memory!
+  value: 32
+eval_sample:
+  desc: Percentage of the dev set to use when evaluating
+  value: 0.2
+n_epochs:
+  desc: Number of epochs to train BERT
+  value: 2
+learning_rate:
+  desc: BERT learning rate
+  value: 0.00005
+gradient_accumulation_steps:
+  desc: Steps to accumulate the gradient when training
+  value: 1 
+train_loss_print:
+  desc: Steps to use before logging loss
+  value: 200  # CHANGE THIS 
+eval_steps: 
+  desc: Steps to run before running an evaluate step
+  value: 400  # CHANGE THIS
+axioms:
+  desc: List of axioms to run
+  value: [LNC2]
+delta:
+  desc: Delta for TFC1 and TFC2
+  value: 10
+stmc_sim:
+  desc:  MInumum similarity between documents for STMC
+  value: 0.2
+LNC2_path:
+  desc: Path for the LNC2 CPP code (already compiled!)
+  value: /ssd2/arthur/indri/LNC2

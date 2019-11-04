@@ -1,0 +1,42 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.8.12
+    is_jupyter_run: false
+    python_version: 3.7.3
+corpus_size:
+  desc: Number of documents in the corpus
+  value: 3213835
+data_home:
+  desc: Where to save data to
+  value: /ssd2/arthur/bert-axioms
+download_path:
+  desc: Default msmarco download path
+  value: https://msmarco.blob.core.windows.net/msmarcoranking/
+epochs:
+  desc: Number of epochs to train over
+  value: 3
+force_steps:
+  desc: Steps to forecefully run
+  value: null
+full_dev_queries:
+  desc: Number of dev queries in the original dataset
+  value: 5193
+logging_level:
+  desc: Level for Python logger
+  value: INFO
+max_document_len:
+  desc: Maximum number of tokens to be considered in the document for the cut-down
+    version of the dataset
+  value: 512
+number_of_cpus:
+  desc: Number of CPUs to be used on parallel bits
+  value: 48
+tokenizer_class:
+  desc: Class to be used on tokenizer
+  value: distilbert-base-uncased
+train_queries:
+  desc: Number of train queries expected
+  value: 367013

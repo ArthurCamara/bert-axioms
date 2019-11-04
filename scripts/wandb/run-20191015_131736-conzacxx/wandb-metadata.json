@@ -1,0 +1,26 @@
+{
+    "root": "/ssd2/arthur/TREC2019",
+    "program": "full_experiment.py",
+    "git": {
+        "remote": "git+ssh://git@github.com/ArthurCamara/DeepIR-Interpretability.git",
+        "commit": "db63d12765a9cf0f33e1a56a5fc5a6601cd53d8d"
+    },
+    "email": "camara.arthur@gmail.com",
+    "startedAt": "2019-10-15T13:17:36.754498",
+    "host": "deepir.ewi.tudelft.nl",
+    "username": "arthur",
+    "executable": "/home/arthur/miniconda3/envs/bert/bin/python",
+    "os": "Linux-4.4.0-93-generic-x86_64-with-debian-stretch-sid",
+    "python": "3.7.3",
+    "gpu": "GeForce GTX 1080 Ti",
+    "gpu_count": 8,
+    "cpu_count": 56,
+    "cuda": "10.1.168",
+    "args": [],
+    "state": "finished",
+    "jobType": null,
+    "mode": "run",
+    "project": "axiomatic-bert",
+    "heartbeatAt": "2019-10-15T13:17:38.627677",
+    "exitcode": 0
+}
