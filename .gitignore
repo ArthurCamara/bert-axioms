@@ -4,6 +4,7 @@ venvs/*
 terrier-core/*
 terrier/*
 scripts/wandb/*
+wandb/*
 .vscode/
 
 # Byte-compiled / optimized / DLL files
