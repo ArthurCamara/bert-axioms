@@ -2,10 +2,9 @@ from transformers import DistilBertTokenizer
 import logging
 from tqdm.auto import tqdm
 import os
-import multiprocessing as mp
-from multiprocessing import current_process
 import pickle
-# mp.set_start_method('spawn', True)
+import time
+from tokenizers import BertWordPieceTokenizer
 logging.getLogger("transformers").setLevel(logging.WARNING)
 
 
@@ -54,36 +53,43 @@ def tokenize_queries(config):
 
 
 def process_chunk(chunk_no, block_offset, no_lines, config):
-    current = current_process()
-    if current.name == "MainProcess":
-        position = 2
-    else:
-        position = current._identity[0] + 2
     # Load lines
-    lines = []
+    doc_ids = []
+    full_texts = []
     docs_path = os.path.join(config["data_home"], "docs/msmarco-docs.tsv")
     with open(docs_path, encoding="utf-8") as f:
         f.seek(block_offset[chunk_no])
-        for i in tqdm(range(no_lines), desc="Loading block for {}".format(chunk_no), position=position):
-            lines.append(f.readline())
-    tokenizer = DistilBertTokenizer.from_pretrained(config["bert_class"])
+        for i in tqdm(range(no_lines), desc="Loading block for {}".format(chunk_no)):
+            line = f.readline()
+            try:
+                doc_id, url, title, text = line[:-1].split("\t")
+            except (IndexError, ValueError):
+                continue
+            doc_ids.append(doc_id)
+            full_texts.append(" ".join([url, title, text]))
+    # tokenizer = DistilBertTokenizer.from_pretrained(config["bert_class"])
+    tokenizer = BertWordPieceTokenizer(config["tokenizer_vocab_path"], lowercase=True)
     output_line_format = "{}\t{}\n"
     trec_format = "<DOC>\n<DOCNO>{}</DOCNO>\n<TEXT>{}</TEXT></DOC>\n"
     partial_doc_path = os.path.join(config["data_home"], "tmp", "docs-{}".format(chunk_no))
     partial_doc_path_bert = os.path.join(config["data_home"], "tmp", "docs-{}.bert".format(chunk_no))
     partial_trec_path = os.path.join(config["data_home"], "tmp", "trec_docs-{}".format(chunk_no))
+
     with open(partial_doc_path, 'w', encoding="utf-8") as outf, open(partial_trec_path, 'w', encoding="utf-8") as outf_trec, open(partial_doc_path_bert, 'w', encoding='utf-8') as outf_bert:  # noqa E501
-        for line in tqdm(lines, desc="Running for chunk {}".format(chunk_no), position=position):
-            try:
-                doc_id, url, title, text = line[:-1].split("\t")
-            except IndexError:
-                continue
-            full_text = " ".join([url, title, text])
-            bert_text = [x for x in tokenizer.tokenize(full_text)]
+        start = time.time()
+        tokenized = tokenizer.encode_batch(full_texts)
+        end = time.time()
+        print("tokenizer {} finished in {}s".format(chunk_no, end - start), )
+        for doc_id, sample in tqdm(zip(doc_ids, tokenized), desc="dumping tokenized docs to tmp file", total=len(tokenized)):  # noqa E501
+            start = time.time()
+            bert_text = sample.tokens[1:-1]
             tokenized_text = ' '.join(bert_text).replace("##", "")
             outf.write(output_line_format.format(doc_id, tokenized_text))
             outf_trec.write(trec_format.format(doc_id, tokenized_text))
             outf_bert.write("{}\t{}\n".format(doc_id, bert_text))
+        outf.flush()
+        outf_trec.flush()
+        outf_bert.flush()
 
 
 def tokenize_docs(config):
@@ -96,7 +102,7 @@ def tokenize_docs(config):
 
     docs_path = os.path.join(config.data_home, "docs/msmarco-docs.tsv")
     assert os.path.isfile(docs_path), "Could not find documents file at {}".format(docs_path)
-    # Load in memory, split blocks and run in paralel. Later
+    # Load in memory, split blocks and run
     excess_lines = config.corpus_size % config.number_of_cpus
     number_of_chunks = config.number_of_cpus
     if excess_lines > 0:
@@ -133,14 +139,9 @@ def tokenize_docs(config):
     if config.number_of_cpus == 1:
         process_chunk(0, block_offset, lines_per_chunk, dict(config))
         return
-    pool = mp.Pool(config.number_of_cpus)
-    jobs = []
+
     for i in range(len(block_offset)):
-        jobs.append(pool.apply_async(process_chunk, args=(
-            i, block_offset, lines_per_chunk, dict(config)), callback=update))
-    for job in jobs:
-        job.get()
-    pool.close()
+        process_chunk(i, block_offset, lines_per_chunk, dict(config))
 
     with open(os.path.join(config.data_home, "docs/msmarco-docs.tokenized.tsv"), 'w') as outf:
         for i in tqdm(range(config.number_of_cpus), desc="Merging tsv file"):

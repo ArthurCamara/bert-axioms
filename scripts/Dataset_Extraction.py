@@ -11,7 +11,7 @@ import logging
 from compute_IDF_on_whole_corpus import compute_IDFS
 from functools import partial
 from gensim.models import KeyedVectors
-from bert_transform import generate_run_file
+from bert import generate_run_file
 import re
 logging.getLogger("gensim").setLevel(logging.WARNING)
 
