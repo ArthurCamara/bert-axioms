@@ -1,20 +1,25 @@
-# DeepIR-Interpretability
-What can we extract from deep models to use back in more traditional IR settings?
+# Bert Axioms
+This is the repository with the code for the Paper Diagnosing _BERT with Retrieval Heuristics_
 
-## Argument chain
-1. We have seen that with sufficient training data, deep retrieval models outpeform retrieval models that are not ML-based (BM25, language modeling). Let's call the latter *traditional models* (ignoring L2R for now).
-2. In many use cases we do not have access to a lot of training data, rendering deep retrieval models useless.
-3. We also know that there are retrieval heuristics that traditional models are based on (heuristics that experts came up with). 
-4. We also have so-called axioms that good retrieval models should fulfill. Axioms have been employed in the past to "fix" traditional retrieval models, which overall led to better retrieval effectiveness. Axioms are limited though - they depend on ideas/insights of experts. They help us to identify shortcomings of deep retrieval models (which axioms are they performing poorly on?), but they do not help us to learn what kind of novel heuristics those deep models have learnt that our traditional models lack.
-5. This is where our work comes in: we aim to extract retrieval heuristics from trained deep models, preferably not only known heuristics but also novel ones.
+## Required Data 
+In order to run this code, you first need to download the dataset from the [TREC 2019 Deep Learning Track Guidelines](https://github.com/microsoft/TREC-2019-Deep-Learning). The path for these should be specified in the [config file](../release/scripts/config-defaults.yaml)
 
-## Goal
-We want better traditional models that do not rely on training data by exploiting insights from deep models.
+You also need a working installation of the [Indri Toolkit](https://github.com/diazf/indri) for indexing and retrieval. 
 
-## Main contribution
-Our research contribution is the move from trained deep model to retrieval heuristic(s).
+## Parameters
+There are a number of hyperparemeter that need to be set (like indri path, number of candidates to be retrieved, random seed etc). These can be set on a config YAML file at [`scripts/config-defaults.yaml`](../release/scripts/config-defaults.yaml). The parameters are handled by [`wandb`](https://wandb.com), but can easily be addapted for any `YAML` reader (take a look at [PyYAML](https://github.com/yaml/pyyaml/).)
 
-## Related work
-- Axioms (how did people come up with them, how have they been employed to fix retrieval models)
-- Deep retrieval models (types, achievements)
-- Analysing deep models (approaches, insights)
+
+## Observations
+Note that, for `LNC2`, we use an external `C++` code for dealing with Indri. This is so we can add the duplicated documents to the index without comprimissing scores. This code should be compiled with Indri's `Makefile.app`. This should be as easy as edditing `Makefile.app` from Indri and running `make -f Makefile.app`. (Check https://lemur.sourceforge.io/indri/ for more details).
+
+The removal process of documents from the indri index does not guarantee that the index statistics will change immediately. This can cause slight differences than the more "correct" way to re-create the index from scratch for every duplicated document. 
+
+## Expected Results
+
+The results from this repository may not directly replicate the ones that appear on the paper. This is due to a few performance improvements made after the paper submission. These, however, do not change the final scores and conclusions. Mostly, you may see a increase on alpha-nDCG for all methods, and a increase on QL performance accross the board.
+
+|            |  `nDCG_cut`  |    `TFCI`    |    `TFCII`   |    `MTDC`    |    `LNC1`    |   `LNC2`   |     `TP`     |    `STMC1`   |   `STMC2`   |   `STMC3`  |
+|------------|:----------:|:----------:|:----------:|:----------:|:----------:|:---------:|:----------:|:----------:|:----------:|:----------:|
+| QL         |   0.3633   | **0.9936** | **0.7008** | **0.8759** | **0.5021** | **1.000** |   0.3852   |   0.4855   | **0.7047** | **0.7011** |
+| DistilBERT | **0.4537** |   0.6109   |   0.3945   |   0.5130   |   0.5006   |   0.0003  | **0.4105** | **0.5040** |   0.5120   |   0.5099   |
