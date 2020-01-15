@@ -1,5 +1,5 @@
 from msmarco_dataset import MsMarcoDataset
-from transformers import DistilBertForSequenceClassification, AdamW, WarmupLinearSchedule
+from transformers import DistilBertForSequenceClassification, AdamW, get_linear_schedule_with_warmup
 import numpy as np
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
@@ -32,7 +32,7 @@ def init_optimizer(
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=lr, eps=1e-8)
     warmup_steps = n_steps * warmup_proportion
-    scheduler = WarmupLinearSchedule(
+    scheduler = get_linear_schedule_with_warmup(
         optimizer, warmup_steps=warmup_steps, t_total=n_steps)
     return optimizer, scheduler
 
@@ -48,7 +48,7 @@ def fit_bert(config, cut):
     train_dataset = MsMarcoDataset(train_triples_path, config.data_home, invert_label=True, size=size)
     size = 11 * (config.full_dev_queries - config.test_set_size)
     dev_dataset = MsMarcoDataset(dev_triples_path, config.data_home, invert_label=True, size=size)
-    
+
     # Set random seeds
     random.seed(config.seed)
     np.random.seed(config.seed)
@@ -84,7 +84,7 @@ def fit_bert(config, cut):
     logging.info("   Total optmization steps %d", num_train_optimization_steps)
 
     global_step = 0
-    tr_loss = logging_loss = 0.0
+    tr_loss = 0.0
     model.zero_grad()
     for _ in tqdm(range(config.n_epochs), desc="Epochs"):
         for step, batch in tqdm(enumerate(data_loader), desc="Batches", total=len(data_loader)):
@@ -109,19 +109,19 @@ def fit_bert(config, cut):
                 wandb.log({
                     "Train Loss": loss.item(),
                     "Leaning Rate": scheduler.get_lr()[0]})
-                    
+
             global_step += 1
             if global_step % config.train_loss_print == 0:
                 logits = outputs[1]
                 preds = logits.detach().cpu().numpy()
+                out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
                 logging.info("Train ROC: {}".format(roc_auc_score(out_label_ids, preds[:, 1])))
                 preds = np.argmax(preds, axis=1)
-                out_label_ids = inputs['labels'].detach().cpu().numpy().flatten()
                 logging.info("Train accuracy: {}".format(
                     accuracy_score(out_label_ids, preds)))
                 logging.info("Training loss: {}".format(
                     loss.item()))
-            
+
             if global_step % config.eval_steps == 0:
                 evaluate(dev_dataset,
                          config.data_home,
@@ -302,7 +302,7 @@ def generate_run_file(split, cut, triples_file=None):
     ql_run_file = os.path.join(config.data_home, "runs/QL_{}-{}.run".format(split, cut))
     if not skip_QL:
         assert os.path.isfile(ql_run_file), "Could not find runs file at %s" % ql_run_file
-        for counter, line in tqdm(enumerate(open(ql_run_file)), desc="reading run file", total=size):
+        for counter, line in tqdm(enumerate(open(ql_run_file)), desc="reading QL run file", total=size):
             [topic_id, _, doc_id, _, score, _] = line.split()
             if topic_id not in ordered_topics:
                 ordered_topics.append(topic_id)
@@ -322,7 +322,7 @@ def generate_run_file(split, cut, triples_file=None):
         alphas = [1.0]
     else:
         # This is to get around weird rounding from numpy
-        alphas = [float("{:.2f}".format(x)) for x in np.arange(0.0, 1.05, 0.05)]
+        alphas = [float("{:.2f}".format(x)) for x in np.arange(0.0, 1.05, config.alpha_step)]
     best_alpha = 0.0
     best_score = 0.0
     scores = []
@@ -377,7 +377,7 @@ def generate_run_file(split, cut, triples_file=None):
         if final_metric > best_score:
             best_score = final_metric
             best_alpha = alpha
-        logging.info("%s for %s-%s at alpha %f: %f", config.metric, split, cut, alpha, final_metric)
+        logging.info("%s for %s-%s with alpha %f: %f", config.metric, split, cut, alpha, final_metric)
     wandb.run.summary["best alpha"] = best_alpha
     wandb.run.summary["best {}".format(config.metric)] = best_score
     logging.info("Best alpha is %f with score %f" % (best_alpha, best_score))

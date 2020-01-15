@@ -15,7 +15,7 @@ logging_level:
   value: "INFO"
 force_steps:
   desc: Steps to forecefully run, even if the output file for the step is present
-  value: [index_cut]
+  value: [doc_tokenizer]
 train_queries:
   desc: Number of train queries expected
   value: 367013
@@ -46,6 +46,9 @@ indri_top_k:
 trec_eval_path:
   desc: Path for trec_eval
   value: "/ssd2/arthur/trec_eval/trec_eval"
+alpha_step:
+  desc: Step of the alpha to evaluate when combining QL and BERT (between 0 and 1)
+  value: 0.2
 test_set_size:
   desc: Size of the test dataset. 30% of the full_dev_queries, if split_percentage is .3.
   value: 1558 
@@ -92,3 +95,6 @@ stmc_sim:
 LNC2_path:
   desc: Path for the LNC2 CPP code (already compiled!)
   value: /ssd2/arthur/indri/LNC2
+tokenizer_vocab_path:
+  desc: Path for the bert-base-uncased-vocab.txt file. (Can be fetched from https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt")
+  value: /ssd2/arthur/bert-axioms/tokenizer/bert-base-uncased-vocab.txt
