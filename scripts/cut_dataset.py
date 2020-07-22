@@ -21,7 +21,6 @@ def cut_docs(config):
             doc_cut = eval(doc_text)[:config.max_document_len]
             outf_bert.write("{}\t{}\n".format(doc_id, doc_cut))
             doc_cut = ' '.join(doc_cut).replace("##", "")
-            break
             outf.write("{}\t{}\n".format(doc_id, doc_cut))
             outf_trec.write(trec_format.format(doc_id, doc_cut))
     logging.info("Created files %s and %s", cut_doc_file, cut_doc_file_trec)
