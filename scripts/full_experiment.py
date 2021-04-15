@@ -35,42 +35,42 @@ def main():
     tokenize_docs(config)
 
     # Cut documents for BERT
-    # cut_docs(config)
+    cut_docs(config)
 
     # Indexes
     # generate_index(config, full=True)
-    # generate_index(config, full=False)
+    generate_index(config, full=False)
 
     # split dev-test queries
-    # split(config)
-    # run_queries(config, "test", False)
-    # run_queries(config, "dev", False)
-    # run_queries(config, "train", False)
+    split(config)
+    run_queries(config, "test", False)
+    run_queries(config, "dev", False)
+    run_queries(config, "train", False)
 
     # run_queries(config, "test", True)
     # run_queries(config, "dev", True)
     # run_queries(config, "train", True)
 
     # Generate features
-    # generate_features(config, "cut", "train")
-    # generate_features(config, "cut", "dev")
-    # generate_features(config, "cut", "test")
+    generate_features(config, "cut", "train")
+    generate_features(config, "cut", "dev")
+    generate_features(config, "cut", "test")
     # generate_features(config, "full", "test")
     # generate_features(config, "full", "dev")
     # generate_features(config, "full", "train")
 
     # Fit DistilBERT
-    # fit_bert(config, "cut")
+    fit_bert(config, "cut")
     # fit_bert(config, "full")
 
-    # generate_run_file("test", "cut")
+    generate_run_file("test", "cut")
     # generate_run_file("test", "full")
 
     # Create datasets
-    # extract_datasets("cut")
+    extract_datasets("cut")
 
     # Check axiomatic performance
-    # check_axioms("cut")
+    check_axioms("cut")
 
 
 if __name__ == "__main__":
