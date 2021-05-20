@@ -4,7 +4,7 @@ Expected inputs are:
 -> Train and development queries
 
 Parameters are expected on file config-defaults.yaml. wandb deals with them.
-Multiple checkpoints will be saved through the code, to make thinks faster on future runs with similar params
+Multiple checkpoints will be saved through the code, to make things faster on future runs with similar params
 """
 import warnings
 import logging
