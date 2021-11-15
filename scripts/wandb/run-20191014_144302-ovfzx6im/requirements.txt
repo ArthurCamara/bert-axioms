@@ -99,7 +99,7 @@ pathtools==0.1.2
 pep8==1.7.1
 pexpect==4.7.0
 pickleshare==0.7.5
-pip==19.2.3
+pip==21.1
 plac==0.9.6
 ply==3.11
 preshed==2.0.1
