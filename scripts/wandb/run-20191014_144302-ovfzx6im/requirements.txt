@@ -80,7 +80,7 @@ matchzoo-py==1.0
 matchzoo==2.1.0
 matplotlib==3.1.1
 mccabe==0.6.1
-mistune==0.8.4
+mistune==2.0.3
 munch==2.3.2
 murmurhash==1.0.2
 nbconvert==5.6.0
